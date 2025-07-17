@@ -1033,7 +1033,7 @@ if tool == "📧 Welcome Email Sender":
 
     # Apply filters
     filtered_df = intake_df[
-        intake_df["Class Code"].isin(selected_class_codes) &
+        intake_df["Class Code Title"].isin(selected_class_codes) &
         (intake_df["Status"].isin(selected_statuses) if status_options else True)
     ]
 
