@@ -2,22 +2,29 @@
 
 import os
 from jinja2 import Template
-import json
 
-TEMPLATE_CONFIG = json.loads(os.environ.get("TEMPLATE_CONFIG", "{}"))
-
-
-def load_template(template_key):
-    config = TEMPLATE_CONFIG[template_key]
-    with open(config["template_file"], "r", encoding="utf-8") as file:
-        content = file.read()
-    return content, config["subject"], config["cc"]
 
 def merge_template(template_key, client_data):
-    body_raw, subject_template, cc_list = load_template(template_key)
+    """
+    Loads a .txt-based template file from the templates directory.
+    The first line is used as the subject line, and the remainder as the email body.
+    Jinja2-style {{placeholders}} are replaced using client_data.
+    """
+    template_path = os.path.join("email_automation", "templates", f"{template_key}.txt")
 
-    # Fill placeholders
-    merged_body = Template(body_raw).render(**client_data)
-    merged_subject = Template(subject_template).render(**client_data)
+    with open(template_path, "r", encoding="utf-8") as file:
+        lines = file.read().splitlines()
 
-    return merged_subject, merged_body, cc_list
+    if not lines:
+        raise ValueError(f"Template '{template_key}' is empty.")
+
+    subject_template = lines[0].strip()
+    body_template = "\n".join(lines[1:]).strip()
+
+    subject = Template(subject_template).render(**client_data)
+    body = Template(body_template).render(**client_data)
+
+    # You can make this dynamic if needed
+    cc = ["athrush@sgghlaw.com"]
+
+    return subject, body, cc

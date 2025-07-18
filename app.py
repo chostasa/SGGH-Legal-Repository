@@ -1019,7 +1019,11 @@ if tool == "📧 Welcome Email Sender":
     intake_df = df[df["Class Code Title"] == "Intake Completed"].copy()
 
     # Dropdown to select template
-    template_key = st.selectbox("Select Email Template", list(TEMPLATE_CONFIG.keys()))
+    import glob
+
+    template_files = glob.glob("email_automation/templates/*.txt")
+    template_keys = [os.path.splitext(os.path.basename(f))[0] for f in template_files]
+    template_key = st.selectbox("Select Email Template", template_keys)
 
     # === Sidebar Filters for Email Tool ===
     with st.sidebar:
