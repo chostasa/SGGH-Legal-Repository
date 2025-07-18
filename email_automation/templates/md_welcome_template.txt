@@ -1,4 +1,4 @@
-Re: Your Case {{CaseID}} – Welcome Letter from Your Legal Team at SGGH
+Re: Your Case {{CaseID}} - Welcome Letter from Your Legal Team at SGGH
 
 Dear {{ClientName}},
 
@@ -14,18 +14,18 @@ Nicholas Wainwright, Esq. - Nicholas@SGGHLaw.com
 
 Attached to this email, you will find the following:
 
-1. About Us Letter – This letter introduces your team of attorneys and support staff here at SGGH who will be working on your case.  
-2. Questionnaire – This packet is crucial to our work on your case. It contains questions that will assist us in handling your matter and includes many questions the opposing attorneys will be asking us about. Kindly answer all questions thoroughly and with as much detail as possible. We have mailed you a physical version of the Questionnaire to complete. However, if you would prefer to fill it out online, please use the link below:
+1. About Us Letter - This letter introduces your team of attorneys and support staff here at SGGH who will be working on your case.  
+2. Questionnaire - This packet is crucial to our work on your case. It contains questions that will assist us in handling your matter and includes many questions the opposing attorneys will be asking us about. Kindly answer all questions thoroughly and with as much detail as possible. We have mailed you a physical version of the Questionnaire to complete. However, if you would prefer to fill it out online, please use the link below:
 
 [Insert questionnaire link here]
 
-**Communications about your case**: This letter, and all communications with your legal team, are protected by the attorney-client privilege. To prevent a breach of that privilege, please do not share these communications with others—especially in writing or on social media. For the best outcome, we encourage you to refrain from posting or messaging about your case or injuries outside of direct communication with your legal team.
+Communications about your case: This letter, and all communications with your legal team, are protected by the attorney-client privilege. To prevent a breach of that privilege, please do not share these communications with others—especially in writing or on social media. For the best outcome, we encourage you to refrain from posting or messaging about your case or injuries outside of direct communication with your legal team.
 
 If anyone contacts you regarding your potential case, please inform our office immediately and forward their contact information. We will be in touch with you as needed as we complete our investigation. As always, we will keep you updated on any significant developments. Please notify us of any changes to your treatment, injuries, or contact information, and forward any relevant documents.
 
 If you are not currently undergoing counseling and believe it would be helpful, we recommend you speak with your primary care physician for a referral. We can also assist you in finding counseling options or provide recommendations.
 
-**Preservation of Evidence**: Please preserve and send us any relevant documents, photographs, correspondence, journals, medical records, school records, therapy notes, bills, or invoices. Let us know if you have any questions about what to retain.
+Preservation of Evidence: Please preserve and send us any relevant documents, photographs, correspondence, journals, medical records, school records, therapy notes, bills, or invoices. Let us know if you have any questions about what to retain.
 
 If you have any questions or concerns at any point during your case, do not hesitate to reach out. We are here to provide support and guidance throughout the process. We are honored to represent you in your pursuit of justice and look forward to fighting for your rights.
 
@@ -42,6 +42,4 @@ Chicago, IL 60606
 Office: (312) 728-7444  
 Fax: (313) 221-9550
 
----
-
-*This email contains confidential information protected by attorney-client privilege. If you are not the intended recipient, please delete this message and notify us immediately. Any unauthorized use, distribution, or copying of this communication is strictly prohibited.*
+This email contains confidential information protected by attorney-client privilege. If you are not the intended recipient, please delete this message and notify us immediately. Any unauthorized use, distribution, or copying of this communication is strictly prohibited.
