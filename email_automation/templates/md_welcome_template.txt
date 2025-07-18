@@ -1,4 +1,4 @@
-Re: Your Case {{CaseID}} – Welcome Letter from Your Legal Team at SGGH
+Re: Your Case {{CaseID}} â€“ Welcome Letter from Your Legal Team at SGGH
 
 Dear {{ClientName}},
 
@@ -14,12 +14,12 @@ Nicholas Wainwright, Esq. - Nicholas@SGGHLaw.com
 
 Attached to this email, you will find the following:
 
-1. About Us Letter – This letter introduces your team of attorneys and support staff here at SGGH who will be working on your case.  
-2. Questionnaire – This packet is crucial to our work on your case. It contains questions that will assist us in handling your matter and includes many questions the opposing attorneys will be asking us about. Kindly answer all questions thoroughly and with as much detail as possible. We have mailed you a physical version of the Questionnaire to complete. However, if you would prefer to fill it out online, please use the link below:
+1. About Us Letter â€“ This letter introduces your team of attorneys and support staff here at SGGH who will be working on your case.  
+2. Questionnaire â€“ This packet is crucial to our work on your case. It contains questions that will assist us in handling your matter and includes many questions the opposing attorneys will be asking us about. Kindly answer all questions thoroughly and with as much detail as possible. We have mailed you a physical version of the Questionnaire to complete. However, if you would prefer to fill it out online, please use the link below:
 
 [Insert questionnaire link here]
 
-**Communications about your case**: This letter, and all communications with your legal team, are protected by the attorney-client privilege. To prevent a breach of that privilege, please do not share these communications with others—especially in writing or on social media. For the best outcome, we encourage you to refrain from posting or messaging about your case or injuries outside of direct communication with your legal team.
+**Communications about your case**: This letter, and all communications with your legal team, are protected by the attorney-client privilege. To prevent a breach of that privilege, please do not share these communications with othersâ€”especially in writing or on social media. For the best outcome, we encourage you to refrain from posting or messaging about your case or injuries outside of direct communication with your legal team.
 
 If anyone contacts you regarding your potential case, please inform our office immediately and forward their contact information. We will be in touch with you as needed as we complete our investigation. As always, we will keep you updated on any significant developments. Please notify us of any changes to your treatment, injuries, or contact information, and forward any relevant documents.
 
