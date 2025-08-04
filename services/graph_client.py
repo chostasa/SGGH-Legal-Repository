@@ -84,7 +84,7 @@ class GraphClient:
         start_time = time.time()
         try:
             # Allow fallback to default sender address from config if not provided
-            sender = sender_address or self.config.GRAPH_SENDER_ADDRESS
+            sender = sender_address or self.config.GRAPH_SENDER_EMAIL
 
             if not sender or not to or not subject or not body:
                 handle_error(
