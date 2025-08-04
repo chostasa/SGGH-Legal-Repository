@@ -1,1 +1,18 @@
-.env 
+# Ignore Python & Streamlit junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Secrets and configs
+.env
+.env.*
+
+# Generated files
+*.docx
+*.pdf
+*.zip
+outputs/
+temp/
