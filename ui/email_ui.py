@@ -17,21 +17,17 @@ from core.db import get_templates
 
 clean_temp_dir()
 
-# Column name options for client details
 NAME_COLUMN_OPTIONS = [
     "Case Details First Party Name (First, Last)",
     "Case Details First Party Name (Full - Last, First)"
 ]
 EMAIL_COLUMN = "Case Details First Party Details Default Email Account Address"
 
-
 def run_ui():
     tenant_id = get_tenant_id()
     branding = get_tenant_branding(tenant_id)
-
     st.header(f"📧 Welcome Email Sender – {branding.get('firm_name', tenant_id)}")
 
-    # Load Excel or dashboard data
     uploaded_excel = st.file_uploader("📂 Upload Excel with Client Data (Optional)", type=["xlsx"])
     if uploaded_excel:
         try:
@@ -43,46 +39,36 @@ def run_ui():
             return
     else:
         try:
-            if "dashboard_df" in st.session_state:
-                df = st.session_state.dashboard_df.copy()
-                st.info("📊 Loaded filtered clients from Dashboard.")
-
-                # Optional column removal
-                st.markdown("### 🗂️ Choose Columns to Keep (Optional)")
-                all_columns = list(df.columns)
-                selected_columns = st.multiselect(
-                    "Select which columns to keep for email building:",
-                    options=all_columns,
-                    default=all_columns
-                )
-                df = df[selected_columns]
-
-            else:
-                # Load full dashboard data from Dropbox
-                with st.spinner("📥 Loading dashboard data..."):
-                    df = download_dashboard_df().copy()
+            if "dashboard_df" not in st.session_state:
+                with st.spinner("📅 Loading dashboard data..."):
+                    st.session_state.dashboard_df = download_dashboard_df().copy()
+                    st.success("✅ Loaded dashboard data from Dropbox.")
+            df = st.session_state.dashboard_df.copy()
         except Exception as e:
             msg = handle_error(e, code="EMAIL_UI_001")
             st.error(msg)
             return
 
-    # Pick the correct NAME_COLUMN
+    st.markdown("### 📂 Choose Columns to Keep (Optional)")
+    all_columns = list(df.columns)
+    selected_columns = st.multiselect(
+        "Select which columns to keep for email building:",
+        options=all_columns,
+        default=all_columns
+    )
+    df = df[selected_columns]
+
     NAME_COLUMN = next((col for col in NAME_COLUMN_OPTIONS if col in df.columns), None)
 
-    # Ensure required columns exist
     if not NAME_COLUMN or EMAIL_COLUMN not in df.columns:
-        st.error(
-            f"❌ Expected one of {NAME_COLUMN_OPTIONS} and '{EMAIL_COLUMN}' not found in data."
-        )
+        st.error(f"❌ Expected one of {NAME_COLUMN_OPTIONS} and '{EMAIL_COLUMN}' not found in data.")
         return
 
-    # Load email templates
     email_templates = get_templates(tenant_id=tenant_id, category="email")
     if not email_templates:
         st.warning("⚠️ No email templates found. Please upload one in Template Manager.")
         return
 
-    # Template selection
     template_options = [t["name"] for t in email_templates]
     selected_template_name = st.selectbox("Select Email Template", template_options)
 
@@ -90,7 +76,6 @@ def run_ui():
         st.error("❌ Selected template not found.")
         return
 
-    # Download the template locally
     try:
         template_path = download_template_file("email", selected_template_name)
         if not os.path.exists(template_path):
@@ -101,14 +86,10 @@ def run_ui():
         st.error(f"❌ Failed to download template: {msg}")
         return
 
-    # Global attachments and CC (applies to all emails)
     st.markdown("### 📎 Global Attachments and CC (applied to all emails)")
-    attachments = st.file_uploader(
-        "Attach PDF or Word files", type=["pdf", "docx"], accept_multiple_files=True
-    )
+    attachments = st.file_uploader("Attach PDF or Word files", type=["pdf", "docx"], accept_multiple_files=True)
     global_cc = st.text_input("CC (comma-separated emails)", value="").split(",")
 
-    # Sidebar filters
     with st.sidebar:
         st.markdown("### 🔎 Filter Clients")
         class_codes = sorted(df["Class Code Title"].dropna().unique()) if "Class Code Title" in df.columns else []
@@ -125,7 +106,6 @@ def run_ui():
         except Exception:
             st.write("⚠️ Unable to load usage summary.")
 
-    # Filter DataFrame by filters
     if "Class Code Title" in df.columns:
         filtered_df = df[
             df["Class Code Title"].isin(selected_codes)
@@ -134,7 +114,6 @@ def run_ui():
     else:
         filtered_df = df.copy()
 
-    # Search bar
     search = st.text_input("🔍 Search client name or email").strip().lower()
     if search:
         filtered_df = filtered_df[
@@ -142,7 +121,6 @@ def run_ui():
             | filtered_df[EMAIL_COLUMN].str.lower().str.contains(search)
         ]
 
-    # Multi-select clients (auto-select all if data came from Litigation Dashboard)
     default_clients = []
     if "dashboard_df" in st.session_state:
         default_clients = filtered_df[NAME_COLUMN].tolist()
@@ -153,13 +131,11 @@ def run_ui():
         default=default_clients
     )
 
-    # Initialize state
     if "email_previews" not in st.session_state:
         st.session_state.email_previews = []
     if "email_status" not in st.session_state:
         st.session_state.email_status = {}
 
-    # Preview Emails
     if st.button("🔍 Preview Emails"):
         st.session_state.email_previews = []
         st.session_state.email_status = {}
@@ -180,9 +156,7 @@ def run_ui():
                     build_email(row_data, template_path, attachments)
                 )
 
-                # Merge global CC into per-email CC
                 combined_cc = list(filter(None, cc + global_cc))
-
                 subject_key = f"subject_{i}"
                 body_key = f"body_{i}"
                 cc_key = f"cc_{i}"
@@ -190,15 +164,10 @@ def run_ui():
 
                 st.markdown(f"**{sanitized['name']}** — _{recipient_email}_")
                 st.text_input("✏️ Subject", subject, key=subject_key)
-
                 st.text_input("📧 CC (comma-separated)", ", ".join(combined_cc), key=cc_key)
-
                 st.markdown("📄 Email Body Preview:")
                 st.components.v1.html(body, height=350, scrolling=True)
-
-                st.markdown(
-                    f"**Status**: {st.session_state.email_status.get(status_key, '⏳ Ready')}"
-                )
+                st.markdown(f"**Status**: {st.session_state.email_status.get(status_key, '⏳ Ready')}")
 
                 if st.button(f"📧 Send to {sanitized['name']}", key=f"send_{i}"):
                     try:
@@ -208,44 +177,30 @@ def run_ui():
                             status = asyncio.run(
                                 send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
                             )
-                            st.session_state.email_status[status_key] = status
+                            st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                            log_usage(
-                                "emails_sent",
-                                tenant_id,
-                                get_user_id(),
-                                1,
-                                {"template_path": template_path},
-                            )
-                            log_audit_event(
-                                "Email Sent",
-                                {
-                                    "client_name": sanitized["name"],
-                                    "template_path": template_path,
-                                    "tenant_id": tenant_id,
-                                },
-                            )
+                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                            log_audit_event("Email Sent", {
+                                "client_name": sanitized["name"],
+                                "template_path": template_path,
+                                "tenant_id": tenant_id,
+                            })
                     except Exception as send_err:
                         err_msg = handle_error(send_err, code="EMAIL_UI_002")
                         st.session_state.email_status[status_key] = err_msg
 
-                st.session_state.email_previews.append(
-                    {
-                        "client": row_data,
-                        "subject_key": subject_key,
-                        "body_key": body_key,
-                        "cc_key": cc_key,
-                        "status_key": status_key,
-                    }
-                )
+                st.session_state.email_previews.append({
+                    "client": row_data,
+                    "subject_key": subject_key,
+                    "body_key": body_key,
+                    "cc_key": cc_key,
+                    "status_key": status_key,
+                })
 
             except Exception as e:
                 msg = handle_error(e, code="EMAIL_UI_003")
-                st.error(
-                    f"❌ Error building email for {row.get(NAME_COLUMN, 'Unknown')}: {msg}"
-                )
+                st.error(f"❌ Error building email for {row.get(NAME_COLUMN, 'Unknown')}: {msg}")
 
-    # Send All
     if st.session_state.email_previews and st.button("📤 Send All"):
         with st.spinner("📤 Sending all emails..."):
 
@@ -258,35 +213,20 @@ def run_ui():
                     client = preview["client"]
                     subject = st.session_state.get(preview["subject_key"], "")
                     body = st.session_state.get(preview["body_key"], "")
-                    cc_list = [
-                        email.strip()
-                        for email in st.session_state.get(preview["cc_key"], "").split(",")
-                        if email.strip()
-                    ]
+                    cc_list = [email.strip() for email in st.session_state.get(preview["cc_key"], "").split(",") if email.strip()]
 
-                    async def send_one(preview_item, client_data, subj, bod, cc_list):
+                    async def send_one(preview_item, client_data, subj, bod, cc):
                         try:
                             check_quota(tenant_id, get_user_id(), "emails_sent", 1)
-                            status = await send_email_and_update(
-                                client_data, subj, bod, cc_list, template_path, attachments
-                            )
-                            st.session_state.email_status[preview_item["status_key"]] = status
+                            status = await send_email_and_update(client_data, subj, bod, cc, template_path, attachments)
+                            st.session_state.email_status[preview_item["status_key"]] = status or "✅ Email sent"
 
-                            log_usage(
-                                "emails_sent",
-                                tenant_id,
-                                get_user_id(),
-                                1,
-                                {"template_path": template_path},
-                            )
-                            log_audit_event(
-                                "Batch Email Sent",
-                                {
-                                    "client_name": client_data.get("Client Name", "Unknown"),
-                                    "template_path": template_path,
-                                    "tenant_id": tenant_id,
-                                },
-                            )
+                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                            log_audit_event("Batch Email Sent", {
+                                "client_name": client_data.get("Client Name", "Unknown"),
+                                "template_path": template_path,
+                                "tenant_id": tenant_id,
+                            })
                         except Exception as e:
                             err_msg = handle_error(e, code="EMAIL_UI_004")
                             st.session_state.email_status[preview_item["status_key"]] = err_msg
@@ -298,7 +238,6 @@ def run_ui():
 
             asyncio.run(send_all())
 
-    # Export Logs
     log_dir = os.path.join("email_automation", "logs")
     csv_path = os.path.join(log_dir, f"{tenant_id}_sent_email_log.csv")
     json_path = os.path.join(log_dir, f"{tenant_id}_sent_email_log.json")
@@ -306,11 +245,7 @@ def run_ui():
     st.markdown("### 📂 Email Log Export")
     if os.path.exists(csv_path):
         with open(csv_path, "rb") as f:
-            st.download_button(
-                "⬇️ Download Email Log (CSV)", f, file_name=os.path.basename(csv_path)
-            )
+            st.download_button("⬇️ Download Email Log (CSV)", f, file_name=os.path.basename(csv_path))
     if os.path.exists(json_path):
         with open(json_path, "rb") as f:
-            st.download_button(
-                "⬇️ Download Email Log (JSON)", f, file_name=os.path.basename(json_path)
-            )
+            st.download_button("⬇️ Download Email Log (JSON)", f, file_name=os.path.basename(json_path))
