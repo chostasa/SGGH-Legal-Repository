@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import asyncio
 from datetime import datetime
 
 from services.email_service import build_email, send_email_and_update
@@ -143,6 +142,7 @@ def run_ui():
     if "email_status" not in st.session_state:
         st.session_state.email_status = {}
 
+    # === Preview Emails ===
     if st.button("🔍 Preview Emails"):
         st.session_state.email_previews = []
         st.session_state.email_status = {}
@@ -159,11 +159,13 @@ def run_ui():
                     st.warning(f"⚠️ Skipping {row_data['Client Name']} - missing email.")
                     continue
 
+                # Build email synchronously by calling asyncio.run once here:
                 subject, body, cc, sanitized, _, recipient_email = asyncio.run(
                     build_email(row_data, template_path, attachments)
                 )
 
                 combined_cc = list(filter(None, cc + global_cc))
+
                 subject_key = f"subject_{i}"
                 body_key = f"body_{i}"
                 cc_key = f"cc_{i}"
@@ -176,28 +178,31 @@ def run_ui():
                 st.components.v1.html(body, height=350, scrolling=True)
                 st.markdown(f"**Status**: {st.session_state.email_status.get(status_key, '⏳ Ready')}")
 
-                if st.button(f"📧 Send to {sanitized['name']}", key=f"send_{i}"):
-                    try:
-                        cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
+                # Use a form to handle each send button individually (Streamlit pattern):
+                with st.form(key=f"send_form_{i}"):
+                    send_button = st.form_submit_button(f"📧 Send to {sanitized['name']}")
+                    if send_button:
+                        try:
+                            cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
+                            # check quota synchronously
+                            check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
 
-                        async def send_single():
-                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
-                            return await send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
+                            # send email synchronously by running async function with asyncio.run
+                            status = asyncio.run(
+                                send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
+                            )
+                            st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                        with st.spinner(f"📧 Sending email to {sanitized['name']}..."):
-                            status = asyncio.run(send_single())
+                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                            log_audit_event("Email Sent", {
+                                "client_name": sanitized["name"],
+                                "template_path": template_path,
+                                "tenant_id": tenant_id,
+                            })
 
-                        st.session_state.email_status[status_key] = status or "✅ Email sent"
-
-                        log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
-                        log_audit_event("Email Sent", {
-                            "client_name": sanitized["name"],
-                            "template_path": template_path,
-                            "tenant_id": tenant_id,
-                        })
-                    except Exception as send_err:
-                        err_msg = handle_error(send_err, code="EMAIL_UI_002")
-                        st.session_state.email_status[status_key] = err_msg
+                        except Exception as send_err:
+                            err_msg = handle_error(send_err, code="EMAIL_UI_002")
+                            st.session_state.email_status[status_key] = err_msg
 
                 st.session_state.email_previews.append({
                     "client": row_data,
@@ -211,52 +216,53 @@ def run_ui():
                 msg = handle_error(e, code="EMAIL_UI_003")
                 st.error(f"❌ Error building email for {row.get(NAME_COLUMN, 'Unknown')}: {msg}")
 
-    if st.session_state.email_previews and st.button("📤 Send All"):
+    # === Send All Emails ===
+    if st.session_state.email_previews and st.button("📤 Send All Emails"):
         with st.spinner("📤 Sending all emails..."):
 
-            async def send_all():
-                tasks = []
-                for preview in st.session_state.email_previews:
-                    if "✅" in st.session_state.email_status.get(preview["status_key"], ""):
-                        continue
+            results = []
+            for preview in st.session_state.email_previews:
+                status = st.session_state.email_status.get(preview["status_key"], "")
+                if "✅" in status:
+                    continue  # skip already sent
 
-                    client = preview["client"]
-                    subject = st.session_state.get(preview["subject_key"], "")
-                    body = st.session_state.get(preview["body_key"], "")
-                    cc_list = [email.strip() for email in st.session_state.get(preview["cc_key"], "").split(",") if email.strip()]
+                client = preview["client"]
+                subject = st.session_state.get(preview["subject_key"], "")
+                body = st.session_state.get(preview["body_key"], "")
+                cc_list = [email.strip() for email in st.session_state.get(preview["cc_key"], "").split(",") if email.strip()]
+                status_key = preview["status_key"]
 
-                    async def send_one(preview_item, client_data, subj, bod, cc):
-                        try:
-                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
-                            status = await send_email_and_update(client_data, subj, bod, cc, template_path, attachments)
+                try:
+                    # check quota sync
+                    check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
+                    # send email sync
+                    status = asyncio.run(
+                        send_email_and_update(client, subject, body, cc_list, template_path, attachments)
+                    )
 
-                            st.session_state.email_status[preview_item["status_key"]] = status or "✅ Email sent"
+                    st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
-                            log_audit_event("Batch Email Sent", {
-                                "client_name": client_data.get("Client Name", "Unknown"),
-                                "template_path": template_path,
-                                "tenant_id": tenant_id,
-                            })
-                        except Exception as e:
-                            err_msg = handle_error(e, code="EMAIL_UI_004")
-                            st.session_state.email_status[preview_item["status_key"]] = err_msg
+                    log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                    log_audit_event("Batch Email Sent", {
+                        "client_name": client.get("Client Name", "Unknown"),
+                        "template_path": template_path,
+                        "tenant_id": tenant_id,
+                    })
 
-                    tasks.append(send_one(preview, client, subject, body, cc_list))
+                    results.append({
+                        "Timestamp": datetime.now().isoformat(),
+                        "Client Name": client.get("Client Name", "Unknown"),
+                        "Email": client.get("Email", ""),
+                        "Subject": subject,
+                        "Body": body,
+                        "Template Path": template_path,
+                        "CC List": ", ".join(cc_list),
+                        "Status": status or "✅ Email sent"
+                    })
 
-                if tasks:
-                    await asyncio.gather(*tasks)
+                except Exception as e:
+                    err_msg = handle_error(e, code="EMAIL_UI_004")
+                    st.session_state.email_status[status_key] = err_msg
 
-            asyncio.run(send_all())
-
-    log_dir = os.path.join("email_automation", "logs")
-    csv_path = os.path.join(log_dir, f"{tenant_id}_sent_email_log.csv")
-    json_path = os.path.join(log_dir, f"{tenant_id}_sent_email_log.json")
-
-    st.markdown("### 📂 Email Log Export")
-    if os.path.exists(csv_path):
-        with open(csv_path, "rb") as f:
-            st.download_button("⬇️ Download Email Log (CSV)", f, file_name=os.path.basename(csv_path))
-    if os.path.exists(json_path):
-        with open(json_path, "rb") as f:
-            st.download_button("⬇️ Download Email Log (JSON)", f, file_name=os.path.basename(json_path))
+            if results:
+                st.info(f"📘 Sent {len(results)} emails successfully.")
