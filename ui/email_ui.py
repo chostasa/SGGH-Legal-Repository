@@ -40,7 +40,7 @@ def run_ui():
     else:
         try:
             if "dashboard_df" not in st.session_state:
-                with st.spinner("📅 Loading dashboard data..."):
+                with st.spinner("🗕 Loading dashboard data..."):
                     st.session_state.dashboard_df = download_dashboard_df().copy()
                     st.success("✅ Loaded dashboard data from Dropbox.")
             df = st.session_state.dashboard_df.copy()
@@ -51,10 +51,19 @@ def run_ui():
 
     st.markdown("### 📂 Choose Columns to Keep (Optional)")
     all_columns = list(df.columns)
+    essential_columns = [
+        "Case Details First Party Name (First, Last)",
+        "Case Details First Party Details Default Email Account Address",
+        "Case Number",
+        "Referred By Name (Full - Last, First)",
+        "CaseID",
+        "Status",
+        "Class Code Title"
+    ]
     selected_columns = st.multiselect(
         "Select which columns to keep for email building:",
         options=all_columns,
-        default=all_columns
+        default=[col for col in essential_columns if col in all_columns]
     )
     df = df[selected_columns]
 
@@ -86,7 +95,7 @@ def run_ui():
         st.error(f"❌ Failed to download template: {msg}")
         return
 
-    st.markdown("### 📎 Global Attachments and CC (applied to all emails)")
+    st.markdown("### 📌 Global Attachments and CC (applied to all emails)")
     attachments = st.file_uploader("Attach PDF or Word files", type=["pdf", "docx"], accept_multiple_files=True)
     global_cc = st.text_input("CC (comma-separated emails)", value="").split(",")
 
@@ -121,9 +130,7 @@ def run_ui():
             | filtered_df[EMAIL_COLUMN].str.lower().str.contains(search)
         ]
 
-    default_clients = []
-    if "dashboard_df" in st.session_state:
-        default_clients = filtered_df[NAME_COLUMN].tolist()
+    default_clients = []  # Prevent auto-selecting all
 
     selected_clients = st.multiselect(
         "Select Clients to Email",

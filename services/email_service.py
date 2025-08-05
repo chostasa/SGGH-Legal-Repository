@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import base64
+import requests
 from datetime import datetime
 from core.security import sanitize_text, sanitize_email, redact_log, mask_phi
 from core.constants import STATUS_INTAKE_COMPLETED, STATUS_QUESTIONNAIRE_SENT
@@ -9,31 +10,70 @@ from core.usage_tracker import log_usage, check_quota
 from core.error_handling import handle_error, AppError
 from core.audit import log_audit_event
 from email_automation.utils.template_engine import merge_template
-from services.graph_client import GraphClient
 from services.neos_client import NeosClient
-from services.dropbox_client import download_template_file  # centralizes Dropbox path logic
+from services.dropbox_client import download_template_file
 from logger import logger
 import json
 
-graph = GraphClient()
 neos = NeosClient()
 
 
+# ✅ Replaces the broken async GraphClient.send_email with a working sync method
+def get_access_token():
+    tenant_id = os.environ.get("GRAPH_TENANT_ID")
+    client_id = os.environ.get("GRAPH_CLIENT_ID")
+    client_secret = os.environ.get("GRAPH_CLIENT_SECRET")
+
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {
+        "client_id": client_id,
+        "scope": "https://graph.microsoft.com/.default",
+        "client_secret": client_secret,
+        "grant_type": "client_credentials"
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_type="HTML"):
+    token = get_access_token()
+    from_email = os.environ.get("DEFAULT_SENDER_EMAIL")
+
+    message = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": content_type,
+                "content": body
+            },
+            "toRecipients": [{"emailAddress": {"address": to}}],
+            "ccRecipients": [{"emailAddress": {"address": addr}} for addr in (cc or [])],
+            "attachments": attachments or []
+        },
+        "saveToSentItems": "true"
+    }
+
+    url = f"https://graph.microsoft.com/v1.0/users/{from_email}/sendMail"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, headers=headers, json=message)
+    response.raise_for_status()
+
+
 async def build_email(client_data: dict, template_name: str, attachments: list = None) -> tuple:
-    """
-    Returns (subject, body, cc, sanitized_dict, attachments, recipient_email) for a given client row.
-    Downloads and normalizes the template_path from Dropbox if missing locally.
-    attachments: list of file-like objects or paths.
-    """
     try:
-        # Build sanitized dictionary for placeholder substitution
         sanitized = {
             "name": sanitize_text(str(client_data.get("Case Details First Party Name (First, Last)", ""))),
             "RA": sanitize_text(str(client_data.get("Referred By Name (Full - Last, First)", ""))),
             "ID": sanitize_text(str(client_data.get("Case Number", "")))
         }
 
-        # Validate recipient email
         recipient_email = sanitize_email(
             client_data.get("Case Details First Party Details Default Email Account Address", "")
         )
@@ -44,12 +84,10 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
                 details=f"Row data: {client_data}",
             )
 
-        # If the template doesn't exist locally, download from Dropbox (email category)
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
             template_path = download_template_file("email", template_name, "email_templates_cache")
 
-        # Merge template with sanitized placeholders
         subject, body, cc = merge_template(template_path, sanitized)
         if not subject or not body:
             raise AppError(
@@ -58,9 +96,6 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
                 details=f"Sanitized data: {sanitized}",
             )
 
-        cc = cc or []
-
-        # Log audit event for build
         log_audit_event("Email Built", {
             "tenant_id": get_tenant_id(),
             "user_id": get_user_id(),
@@ -68,7 +103,7 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
             "template_path": template_path,
         })
 
-        return subject, body, cc, sanitized, attachments or [], recipient_email
+        return subject, body, cc or [], sanitized, attachments or [], recipient_email
 
     except AppError:
         raise
@@ -83,10 +118,6 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
 
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
-    """
-    Sends the email (with attachments), updates NEOS, logs usage and returns a result string.
-    Downloads template from Dropbox if missing locally.
-    """
     try:
         recipient_email = sanitize_email(
             client.get("Case Details First Party Details Default Email Account Address", "")
@@ -97,10 +128,8 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                 message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}",
             )
 
-        # Quota check
         await check_quota("emails_sent", get_tenant_id(), get_user_id(), 1)
 
-        # Prepare attachments for Graph
         formatted_attachments = []
         if attachments:
             for a in attachments:
@@ -108,7 +137,6 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                     file_bytes = a.read()
                     file_name = a.name
                 else:
-                    # If path is passed
                     file_name = os.path.basename(a)
                     with open(a, "rb") as f:
                         file_bytes = f.read()
@@ -120,37 +148,30 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                     "contentBytes": base64.b64encode(file_bytes).decode("utf-8")
                 })
 
-        # Detect body type for Graph API
         body_type = "HTML" if body.strip().startswith("<") else "Text"
 
-        # Send email using Graph
-        with logger.contextualize(tenant_id=get_tenant_id(), user_id=get_user_id()):
-            await graph.send_email(
-                sender_address=None,
-                to=recipient_email,
-                subject=subject,
-                body=body,
-                cc=cc,
-                attachments=formatted_attachments,
-                body_type=body_type
-            )
+        # ✅ Call working function
+        send_email_via_graph(
+            to=recipient_email,
+            subject=subject,
+            body=body,
+            cc=cc,
+            attachments=formatted_attachments,
+            content_type=body_type
+        )
 
-        # Update NEOS case status (best-effort)
         try:
             await neos.update_case_status(client.get("CaseID", ""), STATUS_QUESTIONNAIRE_SENT)
         except Exception as e:
             logger.warning(f"⚠️ NEOS update failed for CaseID {client.get('CaseID', '')}: {e}")
 
-        # Ensure template is available for logging
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
             template_path = download_template_file("email", template_name, "email_templates_cache")
 
-        # Log email
         await log_email(client, subject, body, template_path, cc)
         log_usage("emails_sent", get_tenant_id(), get_user_id(), 1, {"template_path": template_path})
 
-        # Audit
         log_audit_event("Email Sent", {
             "tenant_id": get_tenant_id(),
             "user_id": get_user_id(),
@@ -175,9 +196,6 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
 
 
 async def log_email(client: dict, subject: str, body: str, template_path: str, cc: list):
-    """
-    Logs email activity into CSV and JSON files using normalized template_path.
-    """
     try:
         subject_clean = sanitize_text(str(subject))
         body_clean = sanitize_text(str(body))
@@ -209,14 +227,12 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
             "OpenTrackingURL": f"https://tracking.legalhub.app/open/{tenant_id}/{get_user_id()}/{client.get('CaseID', '')}"
         }
 
-        # Append to CSV
         if os.path.exists(csv_path):
             existing = pd.read_csv(csv_path)
             pd.concat([existing, pd.DataFrame([entry])], ignore_index=True).to_csv(csv_path, index=False)
         else:
             pd.DataFrame([entry]).to_csv(csv_path, index=False)
 
-        # Append to JSON
         existing_json = []
         if os.path.exists(json_path):
             with open(json_path, "r") as jf:
@@ -228,7 +244,6 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
         with open(json_path, "w") as jf:
             json.dump(existing_json, jf, indent=2)
 
-        # Audit event
         log_audit_event("Email Logged", {
             "tenant_id": tenant_id,
             "user_id": get_user_id(),
