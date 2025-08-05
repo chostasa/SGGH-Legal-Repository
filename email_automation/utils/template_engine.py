@@ -11,30 +11,40 @@ def merge_template(template_path: str, replacements: dict) -> tuple[str, str, li
 
     Returns: (subject, body, cc_list)
     """
-    # Accept the full path instead of rebuilding it
+    # Ensure the template exists
     if not os.path.exists(template_path):
         raise FileNotFoundError(f"Template '{template_path}' not found")
 
+    # Read file contents
     with open(template_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Validate template sections
+    # Ensure required sections exist
     if "Subject:" not in content or "Body:" not in content:
         raise ValueError("Template must contain both 'Subject:' and 'Body:' sections")
 
-    # Split into subject and body
+    # Parse subject and body
     subject_line = content.split("Subject:")[1].split("Body:")[0].strip()
     body_content = content.split("Body:")[1].strip()
 
-    # Replace {{placeholders}} in subject and body
+    # Perform placeholder replacements
     for key, value in replacements.items():
         subject_line = subject_line.replace(f"{{{{{key}}}}}", str(value))
         body_content = body_content.replace(f"{{{{{key}}}}}", str(value))
 
-    # Build CC list if ReferringAttorneyEmail exists
-    cc_list = (
-        [replacements.get("ReferringAttorneyEmail", "")]
-        if "ReferringAttorneyEmail" in replacements else []
-    )
+    # Ensure the body is valid HTML if not already
+    body_lower = body_content.strip().lower()
+    if not body_lower.startswith("<html") and not body_lower.startswith("<!doctype"):
+        body_content = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+{body_content}
+</body>
+</html>"""
+
+    # Optional CC list if ReferringAttorneyEmail is present
+    cc_email = replacements.get("ReferringAttorneyEmail")
+    cc_list = [cc_email] if cc_email else []
 
     return subject_line, body_content, cc_list
