@@ -165,7 +165,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
 
         check_quota("emails_sent", 1)
 
-        body_type = "HTML" if body.strip().startswith("<") else "Text"
+        body_type = "HTML"
 
         print("🧭 Reached the email send step in send_email_and_update")
         print(f"🚀 Calling send_email for: {recipient_email}")
