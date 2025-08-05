@@ -1,50 +1,53 @@
 import os
+from typing import Tuple, List
 
-def merge_template(template_path: str, replacements: dict) -> tuple[str, str, list[str]]:
+def merge_template(template_path: str, replacements: dict) -> Tuple[str, str, List[str]]:
     """
-    Loads a .txt or .html template using the full template_path and substitutes {{placeholders}} with values.
+    Loads an email template and substitutes {{placeholders}} with values.
+    Template must contain:
+    - Subject: line (only once)
+    - Body: followed by full body content (HTML or plaintext)
 
-    Template format:
+    Example format:
     Subject: Welcome {{ClientName}}
     Body:
-    <html or text content with {{placeholders}}>
+    <html>...</html>
 
-    Returns: (subject, body, cc_list)
+    Returns: (subject, body_html, cc_list)
     """
-    # Ensure the template exists
     if not os.path.exists(template_path):
-        raise FileNotFoundError(f"Template '{template_path}' not found")
+        raise FileNotFoundError(f"Template '{template_path}' not found.")
 
-    # Read file contents
     with open(template_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Ensure required sections exist
     if "Subject:" not in content or "Body:" not in content:
         raise ValueError("Template must contain both 'Subject:' and 'Body:' sections")
 
-    # Parse subject and body
-    subject_line = content.split("Subject:")[1].split("Body:")[0].strip()
-    body_content = content.split("Body:")[1].strip()
+    # Safely split on first occurrence of "Body:" (to preserve body HTML)
+    subject_raw, body_raw = content.split("Body:", 1)
 
-    # Perform placeholder replacements
+    subject = subject_raw.replace("Subject:", "").strip()
+    body = body_raw.strip()
+
+    # Replace all {{placeholders}} in subject and body
     for key, value in replacements.items():
-        subject_line = subject_line.replace(f"{{{{{key}}}}}", str(value))
-        body_content = body_content.replace(f"{{{{{key}}}}}", str(value))
+        subject = subject.replace(f"{{{{{key}}}}}", str(value))
+        body = body.replace(f"{{{{{key}}}}}", str(value))
 
-    # Ensure the body is valid HTML if not already
-    body_lower = body_content.strip().lower()
+    # Wrap plain text in HTML if needed
+    body_lower = body.strip().lower()
     if not body_lower.startswith("<html") and not body_lower.startswith("<!doctype"):
-        body_content = f"""<!DOCTYPE html>
+        body = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
 <body>
-{body_content}
+{body}
 </body>
 </html>"""
 
-    # Optional CC list if ReferringAttorneyEmail is present
+    # Optional CC
     cc_email = replacements.get("ReferringAttorneyEmail")
     cc_list = [cc_email] if cc_email else []
 
-    return subject_line, body_content, cc_list
+    return subject, body, cc_list
