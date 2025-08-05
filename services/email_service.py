@@ -33,15 +33,20 @@ def get_access_token():
         "grant_type": "client_credentials"
     }
 
+    print("🔑 DEBUG: Requesting access token")  # debug
     response = requests.post(url, headers=headers, data=data)
+    print("🔑 DEBUG: Token response status:", response.status_code, "body:", response.text)
     response.raise_for_status()
-    return response.json()["access_token"]
+    token = response.json().get("access_token")
+    print("🔑 DEBUG: Received token ending with:", token[-10:] if token else "None")
+    return token
 
 
 def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_type="HTML"):
     print("🚨 ENTERED send_email_via_graph")
     token = get_access_token()
     from_email = os.environ.get("DEFAULT_SENDER_EMAIL")
+    print("📧 DEBUG: Using sender =", from_email)
 
     message = {
         "message": {
@@ -64,12 +69,10 @@ def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_t
     }
 
     print("🔍 DEBUG: Sending email...")
-    print("From:", from_email)
-    print("To:", to)
-    print("Subject:", subject)
-    print("Send URL:", url)
-    print("Token (last 10 chars):", token[-10:])
-    print("Message Payload:", json.dumps(message, indent=2))
+    print("         To:", to)
+    print("      Subject:", subject)
+    print("      Send URL:", url)
+    print("      Payload:", json.dumps(message, indent=2))
 
     response = requests.post(url, headers=headers, json=message)
 
@@ -78,11 +81,10 @@ def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_t
 
     try:
         response.raise_for_status()
+        print("✅ Email accepted for delivery (202 means Graph took it)")
     except Exception as e:
         print("❌ Exception raised during email send:", e)
         raise
-
-    print("✅ Email accepted for delivery (202 means Graph took it)")
 
 
 async def build_email(client_data: dict, template_name: str, attachments: list = None) -> tuple:
@@ -137,10 +139,12 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
 
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
+    print("⚙️ ENTERED send_email_and_update")
     try:
         recipient_email = sanitize_email(
             client.get("Case Details First Party Details Default Email Account Address", "")
         )
+        print("🔍 DEBUG: Recipient email:", recipient_email)
         if not recipient_email or recipient_email == "invalid@example.com":
             raise AppError(
                 code="EMAIL_SEND_001",
@@ -169,9 +173,9 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
 
         body_type = "HTML" if body.strip().startswith("<") else "Text"
 
+        print("🧭 Reached the email send step in send_email_and_update")
         print("🚀 Calling send_email_via_graph for:", recipient_email)
 
-        # ✅ Call working function
         send_email_via_graph(
             to=recipient_email,
             subject=subject,
@@ -204,9 +208,11 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
         return "✅ Sent"
 
     except AppError as ae:
+        print("❌ AppError in send_email_and_update:", ae)
         logger.error(redact_log(mask_phi(str(ae))))
         return f"❌ Failed: {ae.code}"
     except Exception as e:
+        print("❌ Exception in send_email_and_update:", e)
         fallback_name = client.get("name", client.get("ClientName", "[Unknown Client]"))
         handle_error(
             e,
@@ -273,6 +279,7 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
         })
 
     except Exception as e:
+        print("❌ Exception in log_email:", e)
         handle_error(
             e,
             code="EMAIL_LOG_001",
