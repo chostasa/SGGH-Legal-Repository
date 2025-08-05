@@ -180,33 +180,6 @@ def run_ui():
                 st.session_state[body_key] = body
                 st.markdown(f"**Status**: {st.session_state.email_status.get(status_key, '⏳ Ready')}")
 
-                # Use a form to handle each send button individually (Streamlit pattern):
-                with st.form(key=f"send_form_{i}"):
-                    send_button = st.form_submit_button(f"📧 Send to {sanitized['name']}")
-                    if send_button:
-                        try:
-                            cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
-                            # check quota synchronously
-                            check_quota_and_decrement("emails_sent", 1)
-
-
-                            # send email synchronously by running async function with asyncio.run
-                            status = asyncio.run(
-                                send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
-                            )
-                            st.session_state.email_status[status_key] = status or "✅ Email sent"
-
-                            log_usage("emails_sent", 1, {"template_path": template_path})
-                            log_audit_event("Email Sent", {
-                                "client_name": sanitized["name"],
-                                "template_path": template_path,
-                                "tenant_id": tenant_id,
-                            })
-
-                        except Exception as send_err:
-                            err_msg = handle_error(send_err, code="EMAIL_UI_002")
-                            st.session_state.email_status[status_key] = err_msg
-
                 st.session_state.email_previews.append({
                     "client": row_data,
                     "subject_key": subject_key,
