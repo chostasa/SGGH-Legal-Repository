@@ -62,8 +62,26 @@ def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_t
         "Content-Type": "application/json"
     }
 
+    print("🔍 DEBUG: Sending email...")
+    print("From:", from_email)
+    print("To:", to)
+    print("Subject:", subject)
+    print("Send URL:", url)
+    print("Token (last 10 chars):", token[-10:])
+    print("Message Payload:", json.dumps(message, indent=2))
+
     response = requests.post(url, headers=headers, json=message)
-    response.raise_for_status()
+
+    print("📬 Status Code:", response.status_code)
+    print("📬 Response Text:", response.text)
+
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        print("❌ Exception raised during email send:", e)
+        raise
+
+    print("✅ Email accepted for delivery (202 means Graph took it)")
 
 
 async def build_email(client_data: dict, template_name: str, attachments: list = None) -> tuple:
