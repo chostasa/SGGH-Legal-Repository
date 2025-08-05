@@ -158,7 +158,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                 message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}",
             )
 
-        await check_quota("emails_sent", 1)
+        check_quota("emails_sent", 1)
 
         body_type = "HTML" if body.strip().startswith("<") else "Text"
 
