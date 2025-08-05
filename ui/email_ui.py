@@ -7,7 +7,7 @@ from datetime import datetime
 from services.email_service import build_email, send_email_and_update
 from services.dropbox_client import download_dashboard_df, download_template_file
 from core.security import redact_log, mask_phi
-from core.usage_tracker import log_usage, check_quota, get_usage_summary
+from core.usage_tracker import log_usage, check_quota_and_decrement, get_usage_summary
 from core.auth import get_user_id, get_tenant_id, get_tenant_branding
 from core.audit import log_audit_event
 from core.error_handling import handle_error, AppError
@@ -178,12 +178,14 @@ def run_ui():
 
                 if st.button(f"📧 Send to {sanitized['name']}", key=f"send_{i}"):
                     try:
-                        check_quota(tenant_id, get_user_id(), "emails_sent", 1)
+                        async def send_single():
+                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id(), 1)
+                            return await send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
+
                         cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
                         with st.spinner(f"📧 Sending email to {sanitized['name']}..."):
-                            status = asyncio.run(
-                                send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
-                            )
+                            status = asyncio.run(send_single())
+
                             st.session_state.email_status[status_key] = status or "✅ Email sent"
 
                             log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
@@ -224,8 +226,9 @@ def run_ui():
 
                     async def send_one(preview_item, client_data, subj, bod, cc):
                         try:
-                            check_quota(tenant_id, get_user_id(), "emails_sent", 1)
+                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id(), 1)
                             status = await send_email_and_update(client_data, subj, bod, cc, template_path, attachments)
+
                             st.session_state.email_status[preview_item["status_key"]] = status or "✅ Email sent"
 
                             log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
