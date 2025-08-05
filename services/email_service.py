@@ -3,7 +3,7 @@ import pandas as pd
 import base64
 import requests
 from datetime import datetime
-from bs4 import BeautifulSoup  # ✅ NEW
+from bs4 import BeautifulSoup
 
 from core.security import sanitize_text, sanitize_email, redact_log, mask_phi
 from core.constants import STATUS_INTAKE_COMPLETED, STATUS_QUESTIONNAIRE_SENT
@@ -37,11 +37,21 @@ def get_access_token():
     response.raise_for_status()
     return response.json().get("access_token")
 
-def clean_html_body(body):
+def clean_html_body(body: str) -> str:
+    """
+    Ensures the email body is valid HTML. Avoids Graph API stripping issues.
+    """
     if "<html" in body.lower():
-        soup = BeautifulSoup(body, "html.parser")
-        return str(soup.body or soup)
-    return body
+        return body  # Assume already valid
+    soup = BeautifulSoup(body, "html.parser")
+    body_inner = str(soup)
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+{body_inner}
+</body>
+</html>"""
 
 def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"):
     token = get_access_token()
@@ -49,8 +59,13 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"
     if not from_email:
         raise ValueError("DEFAULT_SENDER_EMAIL environment variable is not set.")
 
-    # Clean HTML body to avoid Graph API stripping
+    # 🛠 Fix: Ensure body is wrapped in <html><body>
     body = clean_html_body(body)
+
+    # 🪵 Debug log
+    logger.info(f"📧 Sending email to: {to}")
+    logger.info(f"📧 Subject: {subject}")
+    logger.info(f"📧 Body Preview:\n{body}")
 
     # Format attachments
     formatted_attachments = []
@@ -83,6 +98,9 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"
         },
         "saveToSentItems": "true"
     }
+
+    # Log full payload
+    logger.debug("📤 Graph API Payload:\n%s", json.dumps(message, indent=2))
 
     url = f"https://graph.microsoft.com/v1.0/users/{from_email}/sendMail"
     headers = {
@@ -142,7 +160,6 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
             raise_it=True
         )
 
-
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
     try:
@@ -189,7 +206,6 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             user_message=f"Failed to send email for {fallback_name}."
         )
         return f"❌ Failed: {type(e).__name__}"
-
 
 async def log_email(client: dict, subject: str, body: str, template_path: str, cc: list):
     try:
