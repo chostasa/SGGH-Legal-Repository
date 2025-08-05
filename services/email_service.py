@@ -39,6 +39,7 @@ def get_access_token():
 
 
 def send_email_via_graph(to, subject, body, cc=None, attachments=None, content_type="HTML"):
+    print("🚨 ENTERED send_email_via_graph")
     token = get_access_token()
     from_email = os.environ.get("DEFAULT_SENDER_EMAIL")
 
@@ -167,6 +168,8 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                 })
 
         body_type = "HTML" if body.strip().startswith("<") else "Text"
+
+        print("🚀 Calling send_email_via_graph for:", recipient_email)
 
         # ✅ Call working function
         send_email_via_graph(
