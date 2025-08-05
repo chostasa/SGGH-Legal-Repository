@@ -179,7 +179,7 @@ def run_ui():
                 if st.button(f"📧 Send to {sanitized['name']}", key=f"send_{i}"):
                     try:
                         async def send_single():
-                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id(), 1)
+                            await check_quota_and_decrement("emails_sent", 1)
                             return await send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
 
                         cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
@@ -226,7 +226,7 @@ def run_ui():
 
                     async def send_one(preview_item, client_data, subj, bod, cc):
                         try:
-                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id(), 1)
+                            await check_quota_and_decrement("emails_sent", 1)
                             status = await send_email_and_update(client_data, subj, bod, cc, template_path, attachments)
 
                             st.session_state.email_status[preview_item["status_key"]] = status or "✅ Email sent"
