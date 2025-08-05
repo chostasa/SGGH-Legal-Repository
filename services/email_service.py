@@ -3,6 +3,8 @@ import pandas as pd
 import base64
 import requests
 from datetime import datetime
+from bs4 import BeautifulSoup  # ✅ NEW
+
 from core.security import sanitize_text, sanitize_email, redact_log, mask_phi
 from core.constants import STATUS_INTAKE_COMPLETED, STATUS_QUESTIONNAIRE_SENT
 from core.auth import get_user_id, get_tenant_id
@@ -31,14 +33,15 @@ def get_access_token():
         "grant_type": "client_credentials"
     }
 
-    print("🔑 DEBUG: Requesting access token")
     response = requests.post(url, headers=headers, data=data)
-    print(f"🔑 DEBUG: Token response status: {response.status_code}, body: {response.text}")
     response.raise_for_status()
-    token = response.json().get("access_token")
-    print("🔑 DEBUG: Received token ending with:", token[-10:] if token else "None")
-    return token
+    return response.json().get("access_token")
 
+def clean_html_body(body):
+    if "<html" in body.lower():
+        soup = BeautifulSoup(body, "html.parser")
+        return str(soup.body or soup)
+    return body
 
 def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"):
     token = get_access_token()
@@ -46,11 +49,10 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"
     if not from_email:
         raise ValueError("DEFAULT_SENDER_EMAIL environment variable is not set.")
 
-    print(f"📧 DEBUG: Sending email from {from_email} to {to}")
-    print("📄 Email body preview (first 500 chars):\n", body[:500])
+    # Clean HTML body to avoid Graph API stripping
+    body = clean_html_body(body)
 
-
-    # Format attachments for Microsoft Graph
+    # Format attachments
     formatted_attachments = []
     if attachments:
         for a in attachments:
@@ -88,17 +90,9 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"
         "Content-Type": "application/json"
     }
 
-    print(f"🔍 DEBUG: Sending email with payload:\n{json.dumps(message, indent=2)}")
     response = requests.post(url, headers=headers, json=message)
-
-    print(f"📬 Response Status Code: {response.status_code}")
-    print(f"📬 Response Text: {response.text}")
-
     if response.status_code != 202:
         raise Exception(f"Email send failed: {response.status_code} {response.text}")
-    print("✅ Email accepted for delivery (202)")
-
-
 
 async def build_email(client_data: dict, template_name: str, attachments: list = None) -> tuple:
     try:
@@ -121,8 +115,6 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
             template_path = download_template_file("email", template_name, "email_templates_cache")
 
         subject, body, cc = merge_template(template_path, sanitized)
-        print("🧪 DEBUG: Merged subject:", subject)
-        print("🧪 DEBUG: Merged body preview:", body[:500])
 
         if not subject or not body:
             raise AppError(
@@ -153,31 +145,16 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
 
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
-    print("⚙️ ENTERED send_email_and_update")
     try:
         recipient_email = sanitize_email(client.get("Case Details First Party Details Default Email Account Address", ""))
-        print(f"🔍 DEBUG: Recipient email: {recipient_email}")
         if not recipient_email or recipient_email == "invalid@example.com":
             raise AppError(
                 code="EMAIL_SEND_001",
-                message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}",
+                message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}"
             )
 
         check_quota("emails_sent", 1)
-
-        body_type = "HTML"
-
-        print("🧭 Reached the email send step in send_email_and_update")
-        print(f"🚀 Calling send_email for: {recipient_email}")
-
-        send_email(
-            to=recipient_email,
-            subject=subject,
-            body=body,
-            cc=cc,
-            attachments=attachments,
-            content_type=body_type
-        )
+        send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="HTML")
 
         try:
             await neos.update_case_status(client.get("CaseID", ""), STATUS_QUESTIONNAIRE_SENT)
@@ -196,22 +173,20 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             "user_id": get_user_id(),
             "client_name": client.get("name", client.get("ClientName")),
             "template_path": template_path,
-            "case_id": client.get("CaseID", ""),
+            "case_id": client.get("CaseID", "")
         })
 
         return "✅ Sent"
 
     except AppError as ae:
-        print(f"❌ AppError in send_email_and_update: {ae}")
         logger.error(redact_log(mask_phi(str(ae))))
         return f"❌ Failed: {ae.code}"
     except Exception as e:
-        print(f"❌ Exception in send_email_and_update: {e}")
         fallback_name = client.get("name", client.get("ClientName", "[Unknown Client]"))
         handle_error(
             e,
             code="EMAIL_SEND_002",
-            user_message=f"Failed to send email for {fallback_name}.",
+            user_message=f"Failed to send email for {fallback_name}."
         )
         return f"❌ Failed: {type(e).__name__}"
 
@@ -267,13 +242,12 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
             "tenant_id": tenant_id,
             "user_id": get_user_id(),
             "client_name": name_clean,
-            "template_path": entry["Template Path"],
+            "template_path": entry["Template Path"]
         })
 
     except Exception as e:
-        print("❌ Exception in log_email:", e)
         handle_error(
             e,
             code="EMAIL_LOG_001",
-            user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}",
+            user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}"
         )
