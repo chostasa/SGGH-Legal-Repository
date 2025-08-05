@@ -177,6 +177,7 @@ def run_ui():
                 st.text_input("📧 CC (comma-separated)", ", ".join(combined_cc), key=cc_key)
                 st.markdown("📄 Email Body Preview:")
                 st.components.v1.html(body, height=350, scrolling=True)
+                st.session_state[body_key] = body
                 st.markdown(f"**Status**: {st.session_state.email_status.get(status_key, '⏳ Ready')}")
 
                 # Use a form to handle each send button individually (Streamlit pattern):
