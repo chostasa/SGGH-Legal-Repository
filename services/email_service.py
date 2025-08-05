@@ -47,6 +47,8 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"
         raise ValueError("DEFAULT_SENDER_EMAIL environment variable is not set.")
 
     print(f"📧 DEBUG: Sending email from {from_email} to {to}")
+    print("📄 Email body preview (first 500 chars):\n", body[:500])
+
 
     # Format attachments for Microsoft Graph
     formatted_attachments = []
@@ -119,6 +121,9 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
             template_path = download_template_file("email", template_name, "email_templates_cache")
 
         subject, body, cc = merge_template(template_path, sanitized)
+        print("🧪 DEBUG: Merged subject:", subject)
+        print("🧪 DEBUG: Merged body preview:", body[:500])
+
         if not subject or not body:
             raise AppError(
                 code="EMAIL_BUILD_003",
