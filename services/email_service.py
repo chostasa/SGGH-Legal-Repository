@@ -18,7 +18,6 @@ import json
 neos = NeosClient()
 
 
-# ✅ Replaces the broken async GraphClient.send_email with a working sync method
 def get_access_token():
     tenant_id = os.environ.get("GRAPH_TENANT_ID")
     client_id = os.environ.get("GRAPH_CLIENT_ID")
@@ -33,7 +32,7 @@ def get_access_token():
         "grant_type": "client_credentials"
     }
 
-    print("🔑 DEBUG: Requesting access token")  # debug
+    print("🔑 DEBUG: Requesting access token")
     response = requests.post(url, headers=headers, data=data)
     print("🔑 DEBUG: Token response status:", response.status_code, "body:", response.text)
     response.raise_for_status()

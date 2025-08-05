@@ -178,22 +178,23 @@ def run_ui():
 
                 if st.button(f"📧 Send to {sanitized['name']}", key=f"send_{i}"):
                     try:
+                        cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
+
                         async def send_single():
-                            await check_quota_and_decrement("emails_sent", 1)
+                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
                             return await send_email_and_update(row_data, subject, body, cc_list, template_path, attachments)
 
-                        cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
                         with st.spinner(f"📧 Sending email to {sanitized['name']}..."):
                             status = asyncio.run(send_single())
 
-                            st.session_state.email_status[status_key] = status or "✅ Email sent"
+                        st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
-                            log_audit_event("Email Sent", {
-                                "client_name": sanitized["name"],
-                                "template_path": template_path,
-                                "tenant_id": tenant_id,
-                            })
+                        log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                        log_audit_event("Email Sent", {
+                            "client_name": sanitized["name"],
+                            "template_path": template_path,
+                            "tenant_id": tenant_id,
+                        })
                     except Exception as send_err:
                         err_msg = handle_error(send_err, code="EMAIL_UI_002")
                         st.session_state.email_status[status_key] = err_msg
@@ -226,7 +227,7 @@ def run_ui():
 
                     async def send_one(preview_item, client_data, subj, bod, cc):
                         try:
-                            await check_quota_and_decrement("emails_sent", 1)
+                            await check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
                             status = await send_email_and_update(client_data, subj, bod, cc, template_path, attachments)
 
                             st.session_state.email_status[preview_item["status_key"]] = status or "✅ Email sent"
