@@ -186,7 +186,7 @@ def run_ui():
                         try:
                             cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
                             # check quota synchronously
-                            check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
+                            check_quota_and_decrement("emails_sent")
 
                             # send email synchronously by running async function with asyncio.run
                             status = asyncio.run(
@@ -194,7 +194,7 @@ def run_ui():
                             )
                             st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                            log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                            log_usage("emails_sent", 1, {"template_path": template_path})
                             log_audit_event("Email Sent", {
                                 "client_name": sanitized["name"],
                                 "template_path": template_path,
@@ -235,7 +235,7 @@ def run_ui():
 
                 try:
                     # check quota sync
-                    check_quota_and_decrement("emails_sent", tenant_id, get_user_id())
+                    check_quota_and_decrement("emails_sent")
                     # send email sync
                     status = asyncio.run(
                         send_email_and_update(client, subject, body, cc_list, template_path, attachments)
@@ -243,7 +243,7 @@ def run_ui():
 
                     st.session_state.email_status[status_key] = status or "✅ Email sent"
 
-                    log_usage("emails_sent", tenant_id, get_user_id(), 1, {"template_path": template_path})
+                    log_usage("emails_sent", 1, {"template_path": template_path})
                     log_audit_event("Batch Email Sent", {
                         "client_name": client.get("Client Name", "Unknown"),
                         "template_path": template_path,

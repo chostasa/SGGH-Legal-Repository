@@ -158,7 +158,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                 message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}",
             )
 
-        await check_quota("emails_sent", get_tenant_id(), get_user_id(), 1)
+        await check_quota("emails_sent", 1)
 
         body_type = "HTML" if body.strip().startswith("<") else "Text"
 
@@ -184,7 +184,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             template_path = download_template_file("email", template_name, "email_templates_cache")
 
         await log_email(client, subject, body, template_path, cc)
-        log_usage("emails_sent", get_tenant_id(), get_user_id(), 1, {"template_path": template_path})
+        log_usage("emails_sent", 1, {"template_path": template_path})
 
         log_audit_event("Email Sent", {
             "tenant_id": get_tenant_id(),
