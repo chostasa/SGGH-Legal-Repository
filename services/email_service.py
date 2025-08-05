@@ -53,7 +53,7 @@ def clean_html_body(body: str) -> str:
 </body>
 </html>"""
 
-def send_email(to, subject, body, cc=None, attachments=None, content_type="HTML"):
+def send_email(to, subject, body, cc=None, attachments=None, content_type="html"):
     token = get_access_token()
     from_email = os.environ.get("DEFAULT_SENDER_EMAIL")
     if not from_email:
@@ -171,7 +171,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             )
 
         check_quota("emails_sent", 1)
-        send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="HTML")
+        send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="html")
 
         try:
             await neos.update_case_status(client.get("CaseID", ""), STATUS_QUESTIONNAIRE_SENT)
