@@ -186,7 +186,8 @@ def run_ui():
                         try:
                             cc_list = [email.strip() for email in st.session_state[cc_key].split(",") if email.strip()]
                             # check quota synchronously
-                            check_quota_and_decrement("emails_sent")
+                            check_quota_and_decrement("emails_sent", 1)
+
 
                             # send email synchronously by running async function with asyncio.run
                             status = asyncio.run(
@@ -235,7 +236,7 @@ def run_ui():
 
                 try:
                     # check quota sync
-                    check_quota_and_decrement("emails_sent")
+                    check_quota_and_decrement("emails_sent", 1)
                     # send email sync
                     status = asyncio.run(
                         send_email_and_update(client, subject, body, cc_list, template_path, attachments)
