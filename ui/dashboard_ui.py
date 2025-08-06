@@ -115,15 +115,20 @@ def run_ui():
 
             for col in selected_display_cols:
                 optional_display_cols.append(col)
-                if 1 < df[col].nunique() < 50:
-                    try:
+                try:
+                    if 1 < df[col].nunique() < 50:
                         vals = df[col].dropna().astype(str).unique().tolist()
                         selected_vals = st.multiselect(f"Filter values for {col}", sorted(vals), key=col)
                         if selected_vals:
                             filtered_df = filtered_df[filtered_df[col].astype(str).isin(selected_vals)]
                             optional_filtered_cols.append(col)
-                    except Exception as e:
-                        logger.warning(redact_log(mask_phi(f"⚠️ Could not filter column {col}: {e}")))
+                    else:
+                        search_term = st.text_input(f"Search for value in {col} (contains)", key=f"{col}_search")
+                        if search_term:
+                            filtered_df = filtered_df[filtered_df[col].astype(str).str.contains(search_term, case=False, na=False)]
+                            optional_filtered_cols.append(col)
+                except Exception as e:
+                    logger.warning(redact_log(mask_phi(f"⚠️ Could not filter column {col}: {e}")))
 
         # Case table
         st.subheader(f"📋 Case Table ({len(filtered_df)} records)")
