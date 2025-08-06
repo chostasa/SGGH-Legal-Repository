@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import html  
 import plotly.express as px
 from services.dropbox_client import DropboxClient
 from core.security import sanitize_text, redact_log, mask_phi
@@ -146,7 +147,7 @@ def run_ui():
         all_display_cols = [col for col in base_display_cols if col in filtered_df.columns] + optional_display_cols
         clean_df = filtered_df[all_display_cols].copy()
         for col in clean_df.columns:
-            clean_df[col] = clean_df[col].apply(lambda x: sanitize_text(str(x)))
+            clean_df[col] = clean_df[col].apply(lambda x: html.unescape(sanitize_text(str(x))))
 
         st.dataframe(clean_df.reset_index(drop=True), use_container_width=True)
 
