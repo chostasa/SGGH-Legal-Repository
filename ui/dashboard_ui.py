@@ -61,14 +61,19 @@ def run_ui():
         if selected_campaign != "(All Campaigns)":
             df = df[df[CAMPAIGN_COL] == selected_campaign]
 
-        # Smart warnings
-        st.markdown("### ⚠️ Smart Warnings")
+        # Flagged cases section for selected campaign
+        flagged_cases_for_campaign = df[df[STATUS_COL].astype(str).str.contains("FLAGGED", case=False, na=False)]
+        if not flagged_cases_for_campaign.empty:
+            st.markdown("### 🚩 Flagged Cases for Selected Campaign")
+            st.dataframe(flagged_cases_for_campaign[[NAME_COL, STATUS_COL]].reset_index(drop=True), use_container_width=True)
+
+        # Filter out old cases
         df["Date Opened"] = pd.to_datetime(df["Date Opened"], errors="coerce")
-        overdue_cases = df[df["Date Opened"] < pd.Timestamp.now() - pd.Timedelta(days=90)]
+        df = df[df["Date Opened"] >= pd.Timestamp.now() - pd.Timedelta(days=90)]
+
+        # Smart case categories
         flagged_cases = df[df[STATUS_COL].astype(str).str.contains("FLAGGED", case=False, na=False)]
         litigation_cases = df[df[STATUS_COL].astype(str).str.contains("LITIGATION", case=False, na=False)]
-        st.warning(f"⏳ {len(overdue_cases)} cases were opened more than 90 days ago.")
-        st.info(f"🚩 {len(flagged_cases)} flagged cases | ⚖️ {len(litigation_cases)} litigation cases")
 
         # Filter preset buttons
         st.markdown("### 🧷 Filter Presets")
@@ -87,6 +92,8 @@ def run_ui():
         st.markdown("### 📊 Key Metrics")
         st.metric("📁 Total Cases", len(df))
         st.metric("✅ Questionnaire Received", df[STATUS_COL].eq("Questionnaire Received").sum())
+        st.metric("🚩 Flagged Cases", len(flagged_cases))
+        st.metric("⚖️ Litigation Cases", len(litigation_cases))
 
         # Cumulative trendline
         st.markdown("### 📈 Cumulative Cases Over Time")
@@ -183,7 +190,7 @@ def run_ui():
         all_display_cols = [col for col in base_display_cols if col in filtered_df.columns] + optional_display_cols
         clean_df = filtered_df[all_display_cols].copy()
         for col in clean_df.columns:
-            clean_df[col] = clean_df[col].apply(lambda x: html.unescape(sanitize_text(str(x).replace("&#x27;", "'").replace("&amp;", "&"))))
+            clean_df[col] = clean_df[col].apply(lambda x: sanitize_text(str(x).replace("&#x27;", "'").replace("&amp;", "&")))
 
         st.dataframe(clean_df.reset_index(drop=True), use_container_width=True)
 
