@@ -13,22 +13,14 @@ clean_temp_dir()
 
 @st.cache_data(ttl=300)
 def load_dashboard_data():
-    """
-    Download the dashboard data from Dropbox.
-    """
     client = DropboxClient()
     return client.download_dashboard_df()
 
-
 def run_ui():
-    """
-    Main Litigation Dashboard UI for internal firm use.
-    """
     st.title("📊 Litigation Dashboard")
 
     error_code = "DASH_001"
     try:
-        # Load dashboard data
         with st.spinner("📥 Loading dashboard data..."):
             start_time = time.time()
             df = load_dashboard_data()
@@ -53,14 +45,70 @@ def run_ui():
         NAME_COL = "Case Details First Party Name (First, Last)"
 
         required_cols = [
-            "Case Details First Party Name (First, Last)",
+            NAME_COL,
             "Case Details First Party Name (Full - Last, First)",
             "Case Details First Party Details Default Phone Number",
-            "Case Details First Party Details Default Email Account Address"
+            "Case Details First Party Details Default Email Account Address",
+            "Date Opened"
         ]
         for col in required_cols:
             if col not in df.columns:
                 df[col] = ""
+
+        # Campaign selector
+        st.markdown("### 🎯 Select Campaign")
+        campaign_list = sorted(df[CAMPAIGN_COL].dropna().unique())
+        selected_campaign = st.selectbox("Campaign", ["(All Campaigns)"] + campaign_list)
+        if selected_campaign != "(All Campaigns)":
+            df = df[df[CAMPAIGN_COL] == selected_campaign]
+
+        # Smart warnings
+        st.markdown("### ⚠️ Smart Warnings")
+        df["Date Opened"] = pd.to_datetime(df["Date Opened"], errors="coerce")
+        missing_emails = df[df["Case Details First Party Details Default Email Account Address"] == ""]
+        overdue_cases = df[df["Date Opened"] < pd.Timestamp.now() - pd.Timedelta(days=90)]
+        st.info(f"✉️ {len(missing_emails)} clients are missing email addresses.")
+        st.warning(f"⏳ {len(overdue_cases)} cases were opened more than 90 days ago.")
+
+        # Filter preset buttons
+        st.markdown("### 🧷 Filter Presets")
+        if st.button("💾 Save Filter Preset"):
+            st.session_state.saved_filter = {
+                "campaign": selected_campaign,
+            }
+            st.success("Preset saved.")
+        if st.button("📂 Load Filter Preset"):
+            preset = st.session_state.get("saved_filter", {})
+            if preset:
+                selected_campaign = preset.get("campaign", selected_campaign)
+                st.success(f"Loaded preset for campaign: {selected_campaign}")
+
+        # KPIs
+        st.markdown("### 📊 Key Metrics")
+        st.metric("📁 Total Cases", len(df))
+        st.metric("✅ Questionnaire Received", df[STATUS_COL].eq("Questionnaire Received").sum())
+        st.metric("⚠️ Missing Emails", len(missing_emails))
+
+        # Trendline
+        st.markdown("### 📈 Cases Opened Over Time")
+        by_month = df.groupby(df["Date Opened"].dt.to_period("M")).size().reset_index(name="Cases")
+        by_month["Date"] = by_month["Date Opened"].dt.to_timestamp()
+        st.plotly_chart(px.line(by_month, x="Date", y="Cases", markers=True), use_container_width=True)
+
+        # Pie chart
+        st.markdown("### 🍩 Case Status Breakdown")
+        st.plotly_chart(px.pie(df, names=STATUS_COL, hole=0.4), use_container_width=True)
+
+        # Add contact health score
+        def contact_score(row):
+            phone = row.get("Case Details First Party Details Default Phone Number", "")
+            email = row.get("Case Details First Party Details Default Email Account Address", "")
+            if phone and email:
+                return "✅ Full"
+            elif phone or email:
+                return "⚠️ Partial"
+            return "❌ Missing"
+        df["Contact Health"] = df.apply(contact_score, axis=1)
 
         # Sidebar filters
         st.sidebar.header("🔍 Base Filters")
@@ -76,25 +124,18 @@ def run_ui():
         if status_filter:
             filtered_df = filtered_df[filtered_df[STATUS_COL].isin(status_filter)]
 
-        # Status overview chart
+        # Charts for filtered view
         st.subheader("📌 Case Status Overview")
         if STATUS_COL in filtered_df.columns:
             status_counts = filtered_df[STATUS_COL].value_counts().reset_index()
             status_counts.columns = ["Case Status", "Count"]
-            st.plotly_chart(
-                px.bar(status_counts, x="Case Status", y="Count", text="Count"),
-                use_container_width=True
-            )
+            st.plotly_chart(px.bar(status_counts, x="Case Status", y="Count", text="Count"), use_container_width=True)
 
-        # Referring attorney chart
         st.subheader("👤 Referring Attorney Overview")
         if REFERRAL_COL in filtered_df.columns:
             referral_counts = filtered_df[REFERRAL_COL].value_counts().reset_index()
             referral_counts.columns = ["Referring Attorney", "Count"]
-            st.plotly_chart(
-                px.bar(referral_counts, x="Referring Attorney", y="Count", text="Count"),
-                use_container_width=True
-            )
+            st.plotly_chart(px.bar(referral_counts, x="Referring Attorney", y="Count", text="Count"), use_container_width=True)
 
         # Optional columns
         st.subheader("➕ Add Optional Columns")
@@ -141,9 +182,9 @@ def run_ui():
             "Case Details First Party Name (First, Last)",           
             "Case Details First Party Name (Full - Last, First)",     
             "Case Details First Party Details Default Phone Number",
-            "Case Details First Party Details Default Email Account Address"
+            "Case Details First Party Details Default Email Account Address",
+            "Contact Health"
         ]
-
         all_display_cols = [col for col in base_display_cols if col in filtered_df.columns] + optional_display_cols
         clean_df = filtered_df[all_display_cols].copy()
         for col in clean_df.columns:
@@ -151,17 +192,14 @@ def run_ui():
 
         st.dataframe(clean_df.reset_index(drop=True), use_container_width=True)
 
-        # Send data to Batch Generator
         if st.button("📤 Send to Batch Generator"):
             st.session_state.dashboard_df = filtered_df[all_display_cols].copy()
             st.success("✅ Data sent! Go to the '📄 Batch Doc Generator' to merge.")
 
-        # NEW: Send data to Email Tool
         if st.button("📧 Send to Email Tool"):
             st.session_state.dashboard_df = filtered_df[all_display_cols].copy()
             st.success("✅ Filtered clients sent! Go to the '📧 Welcome Email Sender' to continue.")
 
-        # Download CSV
         st.download_button(
             label="⬇️ Download Filtered Results as CSV",
             data=filtered_df[all_display_cols].to_csv(index=False).encode("utf-8"),
