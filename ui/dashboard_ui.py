@@ -37,7 +37,6 @@ def run_ui():
         return
 
     try:
-        # Normalize columns
         df.columns = df.columns.str.strip()
         CAMPAIGN_COL = "Case Type"
         STATUS_COL = "Class Code Title"
@@ -65,10 +64,11 @@ def run_ui():
         # Smart warnings
         st.markdown("### ⚠️ Smart Warnings")
         df["Date Opened"] = pd.to_datetime(df["Date Opened"], errors="coerce")
-        missing_emails = df[df["Case Details First Party Details Default Email Account Address"] == ""]
         overdue_cases = df[df["Date Opened"] < pd.Timestamp.now() - pd.Timedelta(days=90)]
-        st.info(f"✉️ {len(missing_emails)} clients are missing email addresses.")
+        flagged_cases = df[df[STATUS_COL].astype(str).str.contains("FLAGGED", case=False, na=False)]
+        litigation_cases = df[df[STATUS_COL].astype(str).str.contains("LITIGATION", case=False, na=False)]
         st.warning(f"⏳ {len(overdue_cases)} cases were opened more than 90 days ago.")
+        st.info(f"🚩 {len(flagged_cases)} flagged cases | ⚖️ {len(litigation_cases)} litigation cases")
 
         # Filter preset buttons
         st.markdown("### 🧷 Filter Presets")
@@ -87,19 +87,14 @@ def run_ui():
         st.markdown("### 📊 Key Metrics")
         st.metric("📁 Total Cases", len(df))
         st.metric("✅ Questionnaire Received", df[STATUS_COL].eq("Questionnaire Received").sum())
-        st.metric("⚠️ Missing Emails", len(missing_emails))
 
-        # Trendline
-        st.markdown("### 📈 Cases Opened Over Time")
-        by_month = df.groupby(df["Date Opened"].dt.to_period("M")).size().reset_index(name="Cases")
-        by_month["Date"] = by_month["Date Opened"].dt.to_timestamp()
-        st.plotly_chart(px.line(by_month, x="Date", y="Cases", markers=True), use_container_width=True)
+        # Cumulative trendline
+        st.markdown("### 📈 Cumulative Cases Over Time")
+        df_sorted = df.sort_values("Date Opened").dropna(subset=["Date Opened"])
+        df_sorted["Cumulative"] = range(1, len(df_sorted) + 1)
+        st.plotly_chart(px.line(df_sorted, x="Date Opened", y="Cumulative", markers=True), use_container_width=True)
 
-        # Pie chart
-        st.markdown("### 🍩 Case Status Breakdown")
-        st.plotly_chart(px.pie(df, names=STATUS_COL, hole=0.4), use_container_width=True)
-
-        # Add contact health score
+        # Contact health score
         def contact_score(row):
             phone = row.get("Case Details First Party Details Default Phone Number", "")
             email = row.get("Case Details First Party Details Default Email Account Address", "")
@@ -179,8 +174,8 @@ def run_ui():
             "Class Code Title",
             "Date Opened",
             "Referred By Name (Full - Last, First)",
-            "Case Details First Party Name (First, Last)",           
-            "Case Details First Party Name (Full - Last, First)",     
+            "Case Details First Party Name (First, Last)",
+            "Case Details First Party Name (Full - Last, First)",
             "Case Details First Party Details Default Phone Number",
             "Case Details First Party Details Default Email Account Address",
             "Contact Health"
@@ -188,7 +183,7 @@ def run_ui():
         all_display_cols = [col for col in base_display_cols if col in filtered_df.columns] + optional_display_cols
         clean_df = filtered_df[all_display_cols].copy()
         for col in clean_df.columns:
-            clean_df[col] = clean_df[col].apply(lambda x: html.unescape(sanitize_text(str(x))))
+            clean_df[col] = clean_df[col].apply(lambda x: html.unescape(sanitize_text(str(x).replace("&#x27;", "'").replace("&amp;", "&"))))
 
         st.dataframe(clean_df.reset_index(drop=True), use_container_width=True)
 
