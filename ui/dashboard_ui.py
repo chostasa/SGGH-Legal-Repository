@@ -67,26 +67,9 @@ def run_ui():
             st.markdown("### 🚩 Flagged Cases for Selected Campaign")
             st.dataframe(flagged_cases_for_campaign[[NAME_COL, STATUS_COL]].reset_index(drop=True), use_container_width=True)
 
-        # Filter out old cases
-        df["Date Opened"] = pd.to_datetime(df["Date Opened"], errors="coerce")
-        df = df[df["Date Opened"] >= pd.Timestamp.now() - pd.Timedelta(days=90)]
-
         # Smart case categories
         flagged_cases = df[df[STATUS_COL].astype(str).str.contains("FLAGGED", case=False, na=False)]
         litigation_cases = df[df[STATUS_COL].astype(str).str.contains("LITIGATION", case=False, na=False)]
-
-        # Filter preset buttons
-        st.markdown("### 🧷 Filter Presets")
-        if st.button("💾 Save Filter Preset"):
-            st.session_state.saved_filter = {
-                "campaign": selected_campaign,
-            }
-            st.success("Preset saved.")
-        if st.button("📂 Load Filter Preset"):
-            preset = st.session_state.get("saved_filter", {})
-            if preset:
-                selected_campaign = preset.get("campaign", selected_campaign)
-                st.success(f"Loaded preset for campaign: {selected_campaign}")
 
         # KPIs
         st.markdown("### 📊 Key Metrics")
@@ -194,6 +177,19 @@ def run_ui():
 
         st.dataframe(clean_df.reset_index(drop=True), use_container_width=True)
 
+        # Filter preset buttons
+        st.markdown("### 🧷 Filter Presets")
+        if st.button("💾 Save Filter Preset"):
+            st.session_state.saved_filter = {
+                "campaign": selected_campaign,
+            }
+            st.success("Preset saved.")
+        if st.button("📂 Load Filter Preset"):
+            preset = st.session_state.get("saved_filter", {})
+            if preset:
+                selected_campaign = preset.get("campaign", selected_campaign)
+                st.success(f"Loaded preset for campaign: {selected_campaign}")
+
         if st.button("📤 Send to Batch Generator"):
             st.session_state.dashboard_df = filtered_df[all_display_cols].copy()
             st.success("✅ Data sent! Go to the '📄 Batch Doc Generator' to merge.")
@@ -208,6 +204,7 @@ def run_ui():
             file_name="filtered_dashboard.csv",
             mime="text/csv"
         )
+
 
     except Exception as e:
         msg = handle_error(e, code="DASH_003", user_message="An error occurred in the Dashboard UI.")
