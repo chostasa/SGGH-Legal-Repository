@@ -311,3 +311,13 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
 
     except Exception as e:
         handle_error(e, code="EMAIL_LOG_001", user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}")
+
+if __name__ == "__main__":
+    try:
+        token = get_neos_token()
+        print("✅ Token successfully retrieved:")
+        print(token)
+    except Exception as e:
+        print("❌ Token retrieval failed:")
+        print(e)
+
