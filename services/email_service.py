@@ -15,7 +15,7 @@ from email_automation.utils.template_engine import merge_template
 from services.neos_client import NeosClient
 from services.dropbox_client import download_template_file
 from logger import logger
-from services.neos_auth import get_neos_token  
+from services.neos_auth import get_neos_token
 import json
 import re
 
@@ -154,7 +154,7 @@ def update_class_code(case_id: str, api_token: str):
     }]
     response = requests.patch(url, headers=headers, json=payload)
     logger.info(f"📌 Class code update response: {response.status_code} - {response.text}")
-    if response.status_code != 204:
+    if response.status_code not in [200, 204]:
         logger.warning(f"⚠️ Class code update failed for {case_id}")
     return response
 
@@ -176,7 +176,7 @@ def update_case_date_label(case_id: str, api_token: str):
     }
     response = requests.put(url, headers=headers, json=payload)
     logger.info(f"📌 Case date update response: {response.status_code} - {response.text}")
-    if response.status_code != 204:
+    if response.status_code not in [200, 204]:
         logger.warning(f"⚠️ Case date update failed for {case_id}")
     return response
 
@@ -296,8 +296,26 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
 if __name__ == "__main__":
     try:
         token = get_neos_token()
-        print("✅ Token successfully retrieved:")
-        print(token)
+        print("✅ NEOS token retrieved successfully:")
+        print(token[:50] + "...")
+
+        test_case_id = "f413d88e-9346-4b0c-a0f1-b33200f19440"
+        print(f"🔍 Testing GET /cases/{test_case_id}")
+
+        url = f"{NEOS_BASE_URL}/cases/{test_case_id}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        print(f"🔁 Status: {response.status_code}")
+        print(f"📄 Response: {response.text[:500]}")
+
+        if response.status_code == 200:
+            print("✅ Token is valid and case endpoint is reachable.")
+        else:
+            print("❌ Token may be invalid or endpoint unreachable.")
+
     except Exception as e:
-        print("❌ Token retrieval failed:")
+        print("❌ Token test failed:")
         print(e)

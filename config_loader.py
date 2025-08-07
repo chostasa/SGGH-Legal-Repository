@@ -73,7 +73,7 @@ def get_env(var_name: str, required: bool = True, default: str = None) -> str:
 class AppConfig:
     def __init__(self):
         # === OpenAI ===
-        self.OPENAI_API_KEY = get_env("OPENAI_API_KEY")
+        self.OPENAI_API_KEY = get_env("OPENAI_API_KEY", required=False)
         self.OPENAI_MODEL = get_env("OPENAI_MODEL", default="gpt-3.5-turbo")
 
         # === Microsoft Graph ===
