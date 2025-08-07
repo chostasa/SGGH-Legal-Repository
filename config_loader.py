@@ -84,7 +84,7 @@ class AppConfig:
 
         # === NEOS ===
         self.NEOS_API_KEY = get_env("NEOS_API_KEY", required=False)
-        self.NEOS_BASE_URL = get_env("NEOS_BASE_URL", default="https://app.neosconnect.com/api/v1")
+        self.NEOS_BASE_URL = get_env("NEOS_BASE_URL", default="https://staging-api.neos-cloud.com")
         self.NEOS_COMPANY_ID = get_env("NEOS_COMPANY_ID", required=False)
 
         # === Dropbox ===
