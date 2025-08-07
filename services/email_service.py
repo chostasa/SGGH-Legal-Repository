@@ -28,7 +28,7 @@ def get_neos_token():
         raise Exception("❌ Missing NEOS partner login credentials.")
 
     headers = {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json-patch+json",
         "x-api-key": integration_id
     }
 
