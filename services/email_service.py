@@ -17,6 +17,7 @@ from services.dropbox_client import download_template_file
 from logger import logger
 import json
 import re
+NEOS_BASE_URL = os.getenv("NEOS_BASE_URL", "https://staging-api.neos-cloud.com")
 
 def extract_guid_from_subject(subject: str) -> str:
     """Extract Neos CaseID (GUID) from subject line"""
@@ -161,7 +162,7 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
         )
 
 def update_class_code(case_id: str, api_token: str):
-    url = f"https://staging-api.neos-cloud.com/cases/{case_id}"
+    url = f"{NEOS_BASE_URL}/cases/{case_id}"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json-patch+json"
@@ -179,7 +180,7 @@ def update_class_code(case_id: str, api_token: str):
     return response
 
 def update_case_date_label(case_id: str, api_token: str):
-    url = f"https://staging-api.neos-cloud.com/cases/v2/{case_id}/caseDates"
+    url = f"{NEOS_BASE_URL}/cases/v2/{case_id}/caseDates"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json"
@@ -202,6 +203,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
     try:
         recipient_email = sanitize_email(client.get("Case Details First Party Details Default Email Account Address", ""))
+        case_id = sanitize_text(str(client.get("Case Number", "")))
         if not recipient_email or recipient_email == "invalid@example.com":
             raise AppError(
                 code="EMAIL_SEND_001",
@@ -211,12 +213,11 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
         check_quota("emails_sent", 1)
         send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="html")
 
-        case_id = extract_guid_from_subject(subject)
-        if not case_id:
-            logger.warning("❌ Could not extract CaseID from subject line. Skipping NEOS update.")
+        if not case_id or not re.match(r"^[0-9a-fA-F-]{36}$", case_id):
+            logger.warning("❌ Invalid or missing Case ID (GUID). Skipping NEOS update.")
         else:
             try:
-                logger.info(f"📌 Extracted CaseID from subject: {case_id}")
+                logger.info(f"📌 Using CaseID from client data: {case_id}")
                 await neos.update_case_status(case_id, STATUS_QUESTIONNAIRE_SENT)
             except Exception as e:
                 logger.warning(f"⚠️ NEOS update failed for CaseID {case_id}: {e}")
@@ -226,6 +227,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                 update_class_code(case_id, os.getenv("NEOS_API_TOKEN"))
             except Exception as e:
                 logger.warning(f"⚠️ Case date or class code update failed: {e}")
+
 
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
@@ -239,7 +241,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             "user_id": get_user_id(),
             "client_name": client.get("name", client.get("ClientName")),
             "template_path": template_path,
-            "case_id": client.get("CaseID", "")
+            "case_id": case_id
         })
 
         return "✅ Sent"
