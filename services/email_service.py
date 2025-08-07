@@ -18,6 +18,36 @@ from logger import logger
 import json
 import re
 
+def get_neos_token():
+    company_id = os.getenv("NEOS_COMPANY_ID")
+    company_secret = os.getenv("NEOS_COMPANY_SECRET")
+    integration_id = os.getenv("NEOS_INTEGRATION_ID")
+    auth_url = os.getenv("NEOS_URL", "https://staging-proxy-api.azurewebsites.net/v1/partnerlogin")
+
+    if not all([company_id, company_secret, integration_id]):
+        raise Exception("❌ Missing NEOS partner login credentials.")
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": integration_id
+    }
+
+    payload = {
+        "companyId": company_id,
+        "companySecret": company_secret
+    }
+
+    response = requests.post(auth_url, headers=headers, json=payload)
+    response.raise_for_status()
+
+    token = response.json().get("token")
+    if not token:
+        raise Exception("❌ Failed to retrieve NEOS token from partner login.")
+
+    logger.info("✅ NEOS token successfully retrieved.")
+    return token
+
+
 NEOS_BASE_URL = os.getenv("NEOS_BASE_URL", "https://staging-api.neos-cloud.com")
 neos = NeosClient()
 
@@ -192,7 +222,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             except Exception as e:
                 logger.warning(f"⚠️ NEOS update failed for CaseID {case_id}: {e}")
 
-            neos_token = os.getenv("NEOS_API_TOKEN")
+            neos_token = get_neos_token()
             if not neos_token:
                 raise Exception("❌ Missing NEOS_API_TOKEN")
             try:
