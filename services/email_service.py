@@ -293,29 +293,75 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
         handle_error(e, code="EMAIL_LOG_001", user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}")
 
 
+# === Test NEOS date + class code update ===
 if __name__ == "__main__":
-    try:
+    BASE_URL = os.getenv("NEOS_BASE_URL", "https://staging-api.neos-cloud.com")
+    client = {
+        "Case Number": "828f9d99-db3d-45e6-a595-b33200f1cdec",
+        "Case Details First Party Details Default Email Account Address": "test@example.com",
+        "name": "Test Client"
+    }
+
+    CASE_ID = sanitize_text(str(client.get("Case Number", "")))
+
+    CASE_DATE_ID = "63af2451-1838-4959-9203-b2dc01311d01"
+    CLASS_CODE_ID = "cd4b826f-1781-4769-9a70-b2dc01461be2"
+
+    def update_case_dates():
         token = get_neos_token()
-        print("✅ NEOS token retrieved successfully:")
-        print(token[:50] + "...")
-
-        test_case_id = "f413d88e-9346-4b0c-a0f1-b33200f19440"
-        print(f"🔍 Testing GET /cases/{test_case_id}")
-
-        url = f"{NEOS_BASE_URL}/cases/{test_case_id}"
+        url = f"{BASE_URL}/cases/v2/{CASE_ID}/caseDates"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        response = requests.get(url, headers=headers)
-        print(f"🔁 Status: {response.status_code}")
-        print(f"📄 Response: {response.text[:500]}")
+        payload = {
+            "CaseDates": [
+                {
+                    "CaseDateId": CASE_DATE_ID,
+                    "Date": datetime.today().strftime("%Y-%m-%dT00:00:00Z"),
+                    "DuplicateCompletedChecklistItems": False
+                }
+            ]
+        }
 
-        if response.status_code == 200:
-            print("✅ Token is valid and case endpoint is reachable.")
+        logger.info(f"🔁 PUT {url}")
+        response = requests.put(url, headers=headers, json=payload)
+        print(f"📡 Status: {response.status_code}")
+        print(f"📄 Response: {response.text}")
+
+        if response.status_code in [200, 204]:
+            print("✅ Case dates updated successfully.")
         else:
-            print("❌ Token may be invalid or endpoint unreachable.")
+            print("❌ Case date update failed.")
 
-    except Exception as e:
-        print("❌ Token test failed:")
-        print(e)
+    def update_class_code():
+        token = get_neos_token()
+        url = f"{BASE_URL}/cases/{CASE_ID}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json-patch+json"
+        }
+        payload = [
+            {
+                "op": "replace",
+                "path": "/ClassId",
+                "value": CLASS_CODE_ID
+            }
+        ]
+
+        print(f"🔁 PATCH {url}")
+        response = requests.patch(url, headers=headers, json=payload)
+        print(f"📡 Status: {response.status_code}")
+        print(f"📄 Response: {response.text}")
+
+        if response.status_code in [200, 204]:
+            print("✅ Class code updated successfully.")
+        else:
+            print("❌ Class code update failed.")
+
+    print("\n=== Testing PUT /caseDates ===")
+    update_case_dates()
+
+    print("\n=== Testing PATCH /cases (class code) ===")
+    update_class_code()
+`
