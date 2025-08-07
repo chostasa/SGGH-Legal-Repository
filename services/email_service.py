@@ -38,11 +38,8 @@ def get_access_token():
     return response.json().get("access_token")
 
 def clean_html_body(body: str) -> str:
-    """
-    Ensures the email body is valid HTML. Avoids Graph API stripping issues.
-    """
     if "<html" in body.lower():
-        return body  # Assume already valid
+        return body
     soup = BeautifulSoup(body, "html.parser")
     body_inner = str(soup)
     return f"""<!DOCTYPE html>
@@ -59,15 +56,12 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
     if not from_email:
         raise ValueError("DEFAULT_SENDER_EMAIL environment variable is not set.")
 
-    # 🛠 Fix: Ensure body is wrapped in <html><body>
     body = clean_html_body(body)
 
-    # 🪵 Debug log
     logger.info(f"📧 Sending email to: {to}")
     logger.info(f"📧 Subject: {subject}")
     logger.info(f"📧 Body Preview:\n{body}")
 
-    # Format attachments
     formatted_attachments = []
     if attachments:
         for a in attachments:
@@ -99,7 +93,6 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
         "saveToSentItems": "true"
     }
 
-    # Log full payload
     logger.debug("📤 Graph API Payload:\n%s", json.dumps(message, indent=2))
 
     url = f"https://graph.microsoft.com/v1.0/users/{from_email}/sendMail"
@@ -160,6 +153,44 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
             raise_it=True
         )
 
+def update_class_code(case_id: str, api_token: str):
+    url = f"https://staging-api.neos-cloud.com/cases/{case_id}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json-patch+json"
+    }
+    payload = [
+        {
+            "op": "replace",
+            "path": "/ClassId",
+            "value": "cd4b826f-1781-4769-9a70-b2dc01461be2"
+        }
+    ]
+    response = requests.patch(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        logger.warning(f"⚠️ Class code update failed for {case_id}: {response.status_code} - {response.text}")
+    return response
+
+def update_case_date_label(case_id: str, api_token: str):
+    url = f"https://staging-api.neos-cloud.com/cases/v2/{case_id}/caseDates"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "CaseDates": [
+            {
+                "CaseDateId": "63af2451-1838-4959-9203-b2dc01311d01",
+                "Date": datetime.today().strftime("%Y-%m-%dT00:00:00Z"),
+                "DuplicateCompletedChecklistItems": False
+            }
+        ]
+    }
+    response = requests.put(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        logger.warning(f"⚠️ Date label update failed for {case_id}: {response.status_code} - {response.text}")
+    return response
+
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
                                 template_name: str, attachments: list = None) -> str:
     try:
@@ -177,6 +208,12 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             await neos.update_case_status(client.get("CaseID", ""), STATUS_QUESTIONNAIRE_SENT)
         except Exception as e:
             logger.warning(f"⚠️ NEOS update failed for CaseID {client.get('CaseID', '')}: {e}")
+
+        try:
+            update_case_date_label(client.get("CaseID", ""), os.getenv("NEOS_API_TOKEN"))
+            update_class_code(client.get("CaseID", ""), os.getenv("NEOS_API_TOKEN"))
+        except Exception as e:
+            logger.warning(f"⚠️ Case date or class code update failed: {e}")
 
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
