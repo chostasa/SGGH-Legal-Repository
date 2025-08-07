@@ -15,45 +15,18 @@ from email_automation.utils.template_engine import merge_template
 from services.neos_client import NeosClient
 from services.dropbox_client import download_template_file
 from logger import logger
+from services.neos_auth import get_neos_token  # ✅ Use centralized token method
 import json
 import re
-
-def get_neos_token():
-    company_id = os.getenv("NEOS_COMPANY_ID")
-    company_secret = os.getenv("NEOS_COMPANY_SECRET")
-    integration_id = os.getenv("NEOS_INTEGRATION_ID")
-    auth_url = os.getenv("NEOS_URL", "https://staging-proxy-api.azurewebsites.net/v1/partnerlogin")
-
-    if not all([company_id, company_secret, integration_id]):
-        raise Exception("❌ Missing NEOS partner login credentials.")
-
-    headers = {
-        "Content-Type": "application/json-patch+json",
-        "x-api-key": integration_id
-    }
-
-    payload = {
-        "companyId": company_id,
-        "companySecret": company_secret
-    }
-
-    response = requests.post(auth_url, headers=headers, json=payload)
-    response.raise_for_status()
-
-    token = response.json().get("token")
-    if not token:
-        raise Exception("❌ Failed to retrieve NEOS token from partner login.")
-
-    logger.info("✅ NEOS token successfully retrieved.")
-    return token
-
 
 NEOS_BASE_URL = os.getenv("NEOS_BASE_URL", "https://staging-api.neos-cloud.com")
 neos = NeosClient()
 
+
 def extract_guid_from_subject(subject: str) -> str:
     match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", subject)
     return match.group(0) if match else ""
+
 
 def get_access_token():
     tenant_id = os.environ.get("GRAPH_TENANT_ID")
@@ -71,6 +44,7 @@ def get_access_token():
     response.raise_for_status()
     return response.json().get("access_token")
 
+
 def clean_html_body(body: str) -> str:
     if "<html" in body.lower():
         return body
@@ -83,6 +57,7 @@ def clean_html_body(body: str) -> str:
 {body_inner}
 </body>
 </html>"""
+
 
 def send_email(to, subject, body, cc=None, attachments=None, content_type="html"):
     token = get_access_token()
@@ -129,6 +104,7 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
     if response.status_code != 202:
         raise Exception(f"Email send failed: {response.status_code} {response.text}")
 
+
 async def build_email(client_data: dict, template_name: str, attachments: list = None) -> tuple:
     try:
         sanitized = {
@@ -164,6 +140,7 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
     except Exception as e:
         handle_error(e, code="EMAIL_BUILD_004", user_message="Failed to build email.", raise_it=True)
 
+
 def update_class_code(case_id: str, api_token: str):
     url = f"{NEOS_BASE_URL}/cases/{case_id}"
     headers = {
@@ -180,6 +157,7 @@ def update_class_code(case_id: str, api_token: str):
     if response.status_code != 204:
         logger.warning(f"⚠️ Class code update failed for {case_id}")
     return response
+
 
 def update_case_date_label(case_id: str, api_token: str):
     url = f"{NEOS_BASE_URL}/cases/v2/{case_id}/caseDates"
@@ -201,6 +179,7 @@ def update_case_date_label(case_id: str, api_token: str):
     if response.status_code != 204:
         logger.warning(f"⚠️ Case date update failed for {case_id}")
     return response
+
 
 async def send_email_and_update(client: dict, subject: str, body: str, cc: list, template_name: str, attachments: list = None) -> str:
     try:
@@ -254,6 +233,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
     except Exception as e:
         handle_error(e, code="EMAIL_SEND_002", user_message="Failed to send email.")
         return f"❌ Failed: {type(e).__name__}"
+
 
 async def log_email(client: dict, subject: str, body: str, template_path: str, cc: list):
     try:
@@ -312,6 +292,7 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
     except Exception as e:
         handle_error(e, code="EMAIL_LOG_001", user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}")
 
+
 if __name__ == "__main__":
     try:
         token = get_neos_token()
@@ -320,4 +301,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("❌ Token retrieval failed:")
         print(e)
-
