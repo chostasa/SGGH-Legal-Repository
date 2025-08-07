@@ -16,6 +16,13 @@ from services.neos_client import NeosClient
 from services.dropbox_client import download_template_file
 from logger import logger
 import json
+import re
+
+def extract_guid_from_subject(subject: str) -> str:
+    """Extract Neos CaseID (GUID) from subject line"""
+    match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", subject)
+    return match.group(0) if match else ""
+
 
 neos = NeosClient()
 
@@ -204,16 +211,21 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
         check_quota("emails_sent", 1)
         send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="html")
 
-        try:
-            await neos.update_case_status(client.get("CaseID", ""), STATUS_QUESTIONNAIRE_SENT)
-        except Exception as e:
-            logger.warning(f"⚠️ NEOS update failed for CaseID {client.get('CaseID', '')}: {e}")
+        case_id = extract_guid_from_subject(subject)
+        if not case_id:
+            logger.warning("❌ Could not extract CaseID from subject line. Skipping NEOS update.")
+        else:
+            try:
+                logger.info(f"📌 Extracted CaseID from subject: {case_id}")
+                await neos.update_case_status(case_id, STATUS_QUESTIONNAIRE_SENT)
+            except Exception as e:
+                logger.warning(f"⚠️ NEOS update failed for CaseID {case_id}: {e}")
 
-        try:
-            update_case_date_label(client.get("CaseID", ""), os.getenv("NEOS_API_TOKEN"))
-            update_class_code(client.get("CaseID", ""), os.getenv("NEOS_API_TOKEN"))
-        except Exception as e:
-            logger.warning(f"⚠️ Case date or class code update failed: {e}")
+            try:
+                update_case_date_label(case_id, os.getenv("NEOS_API_TOKEN"))
+                update_class_code(case_id, os.getenv("NEOS_API_TOKEN"))
+            except Exception as e:
+                logger.warning(f"⚠️ Case date or class code update failed: {e}")
 
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
