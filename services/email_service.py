@@ -140,6 +140,16 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
     except Exception as e:
         handle_error(e, code="EMAIL_BUILD_004", user_message="Failed to build email.", raise_it=True)
 
+def update_case_metadata_from_subject(subject: str):
+    case_id = extract_guid_from_subject(subject)
+    if not case_id:
+        logger.warning("❌ No GUID found in subject. Skipping NEOS updates.")
+        return
+
+    token = get_neos_token()
+    update_class_code(case_id, token)
+    update_case_date_label(case_id, token)
+
 
 def update_class_code(case_id: str, api_token: str):
     url = f"{NEOS_BASE_URL}/cases/{case_id}"
