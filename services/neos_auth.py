@@ -1,12 +1,10 @@
-# utils/neos_auth.py
-
 import os
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_auth_token():
+def get_neos_token():
     url = os.getenv("NEOS_AUTH_URL")
     payload = {
         "username": os.getenv("NEOS_USERNAME"),
