@@ -8,15 +8,17 @@ from core.error_handling import handle_error, AppError
 from core.usage_tracker import enforce_quota, record_latency_metric
 from core.auth import get_tenant_id
 from logger import logger
+from services.neos_auth import get_neos_token
 
 
 class NeosClient:
     def __init__(self, config: AppConfig = None):
         self.config = config or get_config()
         self.base_url = self.config.NEOS_BASE_URL.rstrip("/")
-        self.token = self.config.NEOS_API_KEY
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
+
+    def get_headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {get_neos_token()}",
             "Content-Type": "application/json"
         }
 
@@ -32,24 +34,18 @@ class NeosClient:
             tenant_id = get_tenant_id()
             if not enforce_quota("neos_requests"):
                 logger.warning(f"[QUOTA] Tenant {tenant_id} exceeded NEOS request quota")
-                raise AppError(
-                    code="QUOTA_EXCEEDED",
-                    message="NEOS request quota exceeded."
-                )
+                raise AppError("QUOTA_EXCEEDED", "NEOS request quota exceeded.")
 
             url = f"{self.base_url}/cases/{case_id}"
             start_time = time.perf_counter()
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, timeout=10) as response:
+                async with session.get(url, headers=self.get_headers(), timeout=10) as response:
                     latency = time.perf_counter() - start_time
                     record_latency_metric("neos_get_case_latency", latency)
 
                     if response.status != 200:
-                        raise AppError(
-                            code="NEOS_GET_001",
-                            message=f"NEOS GET failed: {response.status}"
-                        )
+                        raise AppError("NEOS_GET_001", f"NEOS GET failed: {response.status}")
 
                     data = await response.json()
                     if not data or "caseId" not in data:
@@ -80,25 +76,19 @@ class NeosClient:
             tenant_id = get_tenant_id()
             if not enforce_quota("neos_requests"):
                 logger.warning(f"[QUOTA] Tenant {tenant_id} exceeded NEOS request quota")
-                raise AppError(
-                    code="QUOTA_EXCEEDED",
-                    message="NEOS request quota exceeded."
-                )
+                raise AppError("QUOTA_EXCEEDED", "NEOS request quota exceeded.")
 
             url = f"{self.base_url}/cases/{case_id}/class-code"
             payload = {"classCodeTitle": class_code_title}
             start_time = time.perf_counter()
 
             async with aiohttp.ClientSession() as session:
-                async with session.put(url, headers=self.headers, json=payload, timeout=10) as response:
+                async with session.put(url, headers=self.get_headers(), json=payload, timeout=10) as response:
                     latency = time.perf_counter() - start_time
                     record_latency_metric("neos_update_case_latency", latency)
 
                     if response.status != 200:
-                        raise AppError(
-                            code="NEOS_UPDATE_002",
-                            message=f"NEOS UPDATE failed: {response.status}"
-                        )
+                        raise AppError("NEOS_UPDATE_002", f"NEOS UPDATE failed: {response.status}")
 
                     logger.info(
                         redact_log(
@@ -131,14 +121,12 @@ class NeosClient:
             tenant_id = get_tenant_id()
             if not enforce_quota("neos_requests"):
                 logger.warning(f"[QUOTA] Tenant {tenant_id} exceeded NEOS request quota")
-                raise AppError(
-                    code="QUOTA_EXCEEDED",
-                    message="NEOS request quota exceeded."
-                )
+                raise AppError("QUOTA_EXCEEDED", "NEOS request quota exceeded.")
 
             url = f"{self.base_url}/cases/{case_id}/documents"
             headers = {
-                "Authorization": f"Bearer {self.token}"
+                "Authorization": f"Bearer {get_neos_token()}"
+                # Let aiohttp.FormData set the content-type header automatically
             }
             data = aiohttp.FormData()
             data.add_field("file", file_bytes, filename=filename)
@@ -150,10 +138,7 @@ class NeosClient:
                     record_latency_metric("neos_upload_document_latency", latency)
 
                     if response.status != 200:
-                        raise AppError(
-                            code="NEOS_UPLOAD_003",
-                            message=f"NEOS UPLOAD failed: {response.status}"
-                        )
+                        raise AppError("NEOS_UPLOAD_003", f"NEOS UPLOAD failed: {response.status}")
 
                     logger.info(
                         redact_log(
