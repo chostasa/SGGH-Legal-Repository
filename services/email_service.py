@@ -17,21 +17,18 @@ from services.dropbox_client import download_template_file
 from logger import logger
 import json
 import re
+
 NEOS_BASE_URL = os.getenv("NEOS_BASE_URL", "https://staging-api.neos-cloud.com")
+neos = NeosClient()
 
 def extract_guid_from_subject(subject: str) -> str:
-    """Extract Neos CaseID (GUID) from subject line"""
     match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", subject)
     return match.group(0) if match else ""
-
-
-neos = NeosClient()
 
 def get_access_token():
     tenant_id = os.environ.get("GRAPH_TENANT_ID")
     client_id = os.environ.get("GRAPH_CLIENT_ID")
     client_secret = os.environ.get("GRAPH_CLIENT_SECRET")
-
     url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     data = {
@@ -40,7 +37,6 @@ def get_access_token():
         "client_secret": client_secret,
         "grant_type": "client_credentials"
     }
-
     response = requests.post(url, headers=headers, data=data)
     response.raise_for_status()
     return response.json().get("access_token")
@@ -63,7 +59,6 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
     from_email = os.environ.get("DEFAULT_SENDER_EMAIL")
     if not from_email:
         raise ValueError("DEFAULT_SENDER_EMAIL environment variable is not set.")
-
     body = clean_html_body(body)
 
     logger.info(f"📧 Sending email to: {to}")
@@ -90,10 +85,7 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
     message = {
         "message": {
             "subject": subject,
-            "body": {
-                "contentType": content_type,
-                "content": body
-            },
+            "body": {"contentType": content_type, "content": body},
             "toRecipients": [{"emailAddress": {"address": to}}],
             "ccRecipients": [{"emailAddress": {"address": addr}} for addr in (cc or [])],
             "attachments": formatted_attachments
@@ -101,14 +93,8 @@ def send_email(to, subject, body, cc=None, attachments=None, content_type="html"
         "saveToSentItems": "true"
     }
 
-    logger.debug("📤 Graph API Payload:\n%s", json.dumps(message, indent=2))
-
     url = f"https://graph.microsoft.com/v1.0/users/{from_email}/sendMail"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     response = requests.post(url, headers=headers, json=message)
     if response.status_code != 202:
         raise Exception(f"Email send failed: {response.status_code} {response.text}")
@@ -123,11 +109,7 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
 
         recipient_email = sanitize_email(client_data.get("Case Details First Party Details Default Email Account Address", ""))
         if not recipient_email or recipient_email == "invalid@example.com":
-            raise AppError(
-                code="EMAIL_BUILD_001",
-                message=f"Invalid email for client: {sanitized.get('name', '[Unknown]')}",
-                details=f"Row data: {client_data}",
-            )
+            raise AppError("EMAIL_BUILD_001", f"Invalid email for client: {sanitized['name']}", f"Row data: {client_data}")
 
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
@@ -136,16 +118,12 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
         subject, body, cc = merge_template(template_path, sanitized)
 
         if not subject or not body:
-            raise AppError(
-                code="EMAIL_BUILD_003",
-                message=f"Template merge failed for template: {template_path}",
-                details=f"Sanitized data: {sanitized}",
-            )
+            raise AppError("EMAIL_BUILD_003", f"Template merge failed for {template_path}", f"Sanitized data: {sanitized}")
 
         log_audit_event("Email Built", {
             "tenant_id": get_tenant_id(),
             "user_id": get_user_id(),
-            "client_name": sanitized.get("name"),
+            "client_name": sanitized["name"],
             "template_path": template_path,
         })
 
@@ -154,12 +132,7 @@ async def build_email(client_data: dict, template_name: str, attachments: list =
     except AppError:
         raise
     except Exception as e:
-        handle_error(
-            e,
-            code="EMAIL_BUILD_004",
-            user_message="Failed to build email.",
-            raise_it=True
-        )
+        handle_error(e, code="EMAIL_BUILD_004", user_message="Failed to build email.", raise_it=True)
 
 def update_class_code(case_id: str, api_token: str):
     url = f"{NEOS_BASE_URL}/cases/{case_id}"
@@ -167,16 +140,15 @@ def update_class_code(case_id: str, api_token: str):
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json-patch+json"
     }
-    payload = [
-        {
-            "op": "replace",
-            "path": "/ClassId",
-            "value": "cd4b826f-1781-4769-9a70-b2dc01461be2"
-        }
-    ]
+    payload = [{
+        "op": "replace",
+        "path": "/ClassId",
+        "value": "cd4b826f-1781-4769-9a70-b2dc01461be2"
+    }]
     response = requests.patch(url, headers=headers, json=payload)
-    if response.status_code != 200:
-        logger.warning(f"⚠️ Class code update failed for {case_id}: {response.status_code} - {response.text}")
+    logger.info(f"📌 Class code update response: {response.status_code} - {response.text}")
+    if response.status_code != 204:
+        logger.warning(f"⚠️ Class code update failed for {case_id}")
     return response
 
 def update_case_date_label(case_id: str, api_token: str):
@@ -195,23 +167,21 @@ def update_case_date_label(case_id: str, api_token: str):
         ]
     }
     response = requests.put(url, headers=headers, json=payload)
-    if response.status_code != 200:
-        logger.warning(f"⚠️ Date label update failed for {case_id}: {response.status_code} - {response.text}")
+    logger.info(f"📌 Case date update response: {response.status_code} - {response.text}")
+    if response.status_code != 204:
+        logger.warning(f"⚠️ Case date update failed for {case_id}")
     return response
 
-async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
-                                template_name: str, attachments: list = None) -> str:
+async def send_email_and_update(client: dict, subject: str, body: str, cc: list, template_name: str, attachments: list = None) -> str:
     try:
         recipient_email = sanitize_email(client.get("Case Details First Party Details Default Email Account Address", ""))
         case_id = sanitize_text(str(client.get("Case Number", "")))
+
         if not recipient_email or recipient_email == "invalid@example.com":
-            raise AppError(
-                code="EMAIL_SEND_001",
-                message=f"Cannot send email: invalid email address for client {client.get('name', '[Unknown]')}"
-            )
+            raise AppError("EMAIL_SEND_001", f"Cannot send email: invalid email for {client.get('name', '[Unknown]')}")
 
         check_quota("emails_sent", 1)
-        send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments, content_type="html")
+        send_email(to=recipient_email, subject=subject, body=body, cc=cc, attachments=attachments)
 
         if not case_id or not re.match(r"^[0-9a-fA-F-]{36}$", case_id):
             logger.warning("❌ Invalid or missing Case ID (GUID). Skipping NEOS update.")
@@ -222,12 +192,14 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
             except Exception as e:
                 logger.warning(f"⚠️ NEOS update failed for CaseID {case_id}: {e}")
 
+            neos_token = os.getenv("NEOS_API_TOKEN")
+            if not neos_token:
+                raise Exception("❌ Missing NEOS_API_TOKEN")
             try:
-                update_case_date_label(case_id, os.getenv("NEOS_API_TOKEN"))
-                update_class_code(case_id, os.getenv("NEOS_API_TOKEN"))
+                update_case_date_label(case_id, neos_token)
+                update_class_code(case_id, neos_token)
             except Exception as e:
                 logger.warning(f"⚠️ Case date or class code update failed: {e}")
-
 
         template_path = os.path.normpath(template_name)
         if not os.path.exists(template_path):
@@ -250,12 +222,7 @@ async def send_email_and_update(client: dict, subject: str, body: str, cc: list,
         logger.error(redact_log(mask_phi(str(ae))))
         return f"❌ Failed: {ae.code}"
     except Exception as e:
-        fallback_name = client.get("name", client.get("ClientName", "[Unknown Client]"))
-        handle_error(
-            e,
-            code="EMAIL_SEND_002",
-            user_message=f"Failed to send email for {fallback_name}."
-        )
+        handle_error(e, code="EMAIL_SEND_002", user_message="Failed to send email.")
         return f"❌ Failed: {type(e).__name__}"
 
 async def log_email(client: dict, subject: str, body: str, template_path: str, cc: list):
@@ -313,8 +280,4 @@ async def log_email(client: dict, subject: str, body: str, template_path: str, c
         })
 
     except Exception as e:
-        handle_error(
-            e,
-            code="EMAIL_LOG_001",
-            user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}"
-        )
+        handle_error(e, code="EMAIL_LOG_001", user_message=f"Failed to log email for {client.get('name', client.get('ClientName', 'Unknown'))}")
